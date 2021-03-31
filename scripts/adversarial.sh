@@ -1,0 +1,1 @@
+python adversarials.py --attacks DAG_A  --model_path ./checkpoints/UNet.pth --model Unet

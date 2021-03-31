@@ -6,7 +6,20 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import sys, os.path
+import numpy as np
 from util import estimate_weights, make_one_hot
+from torch.autograd import Variable
+
+def onehot2norm(imgs, device):
+    out = torch.argmax(imgs,dim=1,keepdim=True).long()
+    # print("out", out.size())
+    one_hot = torch.FloatTensor(imgs.shape).zero_()
+    one_hot= one_hot.to(device)
+    one_hot.scatter_(1, out, 1)
+    # out = Variable(out.data, requires_grad=True)
+    one_hot = torch.tensor(one_hot, dtype=torch.float64, requires_grad=True)
+    # print('out', out.size())
+    return one_hot
 
 def dice_score(pred, encoded_target):
     """
@@ -27,9 +40,10 @@ def dice_score(pred, encoded_target):
     
     score = loss_per_channel.sum() / output.size(1)
 
-    del output, encoded_target
+    # del output, encoded_target
+    del encoded_target
 
-    return score.mean()
+    return score.mean(), output
 
 
 def dice_loss(pred, encoded_target):
@@ -39,9 +53,8 @@ def dice_loss(pred, encoded_target):
     """
     
     output = F.softmax(pred, dim = 1)
-    
     eps = 1
- 
+    # print('out', output.size())
     intersection = output * encoded_target
     numerator = 2 * intersection.sum(0).sum(1).sum(1) + eps
     denominator = output + encoded_target
@@ -77,9 +90,9 @@ def combined_loss(pred, target, device, n_classes):
     
     weights = estimate_weights(target.float())
     weights = weights.to(device)
-       
+    # print('pred,target', pred.size(), target.size())
     cross = cross_entropy_loss(pred, target, weights)
-    
+    # print('combine')
     target_oh = make_one_hot(target.long(), n_classes, device)
     
     dice = dice_loss(pred, target_oh)
