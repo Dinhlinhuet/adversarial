@@ -18,6 +18,7 @@ from dataset.dataset import SampleDataset, AgDataset
 from util import make_one_hot
 from torch.autograd import Variable
 import torch.optim as optim
+from tqdm import tqdm
 
 # --------------------------------------------------------------------------------
 
@@ -144,10 +145,12 @@ IOU_best = 0
 
 start_epoch = args.start_epoch
 num_epochs = args.epochs
+len_train = len(train_loader)
 best_dice = 1e10
 optimizers = []
 learning_rate = 0.01
 ws = torch.empty([0])
+model = model.double()
 for i, (images, masks) in enumerate(train_loader):
     w = Variable(torch.atan(images.clone()*2-1), requires_grad=True)
     # w = torch.zeros_like(image, requires_grad=True).to(device)
@@ -159,7 +162,8 @@ for i, (images, masks) in enumerate(train_loader):
 ws.to(device)
 print('ws', ws.size())
 c= 1
-m = 10
+b= 1e-1
+m = 50
 for epoch in range(start_epoch,num_epochs+start_epoch):
     model.train()
 
@@ -170,7 +174,10 @@ for epoch in range(start_epoch,num_epochs+start_epoch):
             args.lr /= 10
             optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     dices = []
-    for i, (org_images, masks) in enumerate(train_loader):
+    train_iterator = iter(train_loader)
+    qbar = tqdm(range(len(train_loader)))
+    for i in qbar:
+        org_images, masks= next(train_iterator)
         masks = masks.to(device).long()
         target_class = random.randint(0, n_class - 1)
         adv_target = generate_target_bs(i, masks, target_class=target_class)
@@ -179,12 +186,14 @@ for epoch in range(start_epoch,num_epochs+start_epoch):
         adv_target_oh = make_one_hot(adv_target, n_class, device)
         masks_oh = make_one_hot(masks, n_class, device)
         masks = masks.long()
-        org_images = org_images.to(device).float()
-        for k in range(0,m):
-            images = images.to(device).float()
+        org_images = org_images.to(device).double()
+        sub_dices = []
+        pbar = tqdm(range(m), leave=False)
+        for k in pbar:
+            images = images.to(device).double()
             images = 1 / 2 * (nn.Tanh()(ws[i]) + 1)
-            images = images.to(device).float()
-            # print('img', images.size())
+            images = images.to(device).double()
+            # print('img', images.size(), images.type())
             # tmp_gt = masks
             # adv_target = adv_target.long()
             #     clean_dice = ag_dice_loss(predictions, ground_truth)
@@ -192,8 +201,8 @@ for epoch in range(start_epoch,num_epochs+start_epoch):
             # img, masks, tmp_gt, img_shape,label_ori = get_data(args.data_path, path, img_size=args.img_size, gpu=args.use_gpu)
             optimizer.zero_grad()
             optimizers[i].zero_grad()
-    
-            out, side_5, side_6, side_7, side_8 = model(org_images)
+            # print('img', images.size(), images.type())
+            out, side_5, side_6, side_7, side_8 = model(images)
             # print('out', out.size(), masks.size())
             out = torch.log(softmax_2d(out) + EPS)
             # print('out', out.size())
@@ -213,7 +222,7 @@ for epoch in range(start_epoch,num_epochs+start_epoch):
             clean_dice = dice_loss(ppi, masks_oh)
             adv_direction = adv_dice-clean_dice
             mse = nn.MSELoss(reduction='sum')(images, org_images)
-            cost = mse + adv_direction * c
+            cost = mse*b + adv_direction
             cost = adv_direction
             cost.requires_grad_()
             cost.backward()
@@ -228,8 +237,13 @@ for epoch in range(start_epoch,num_epochs+start_epoch):
             # print('max', torch.min(y_pred), torch.max(y_pred))
             # dice = dice_loss(ppi, masks).detach().cpu().numpy()
             # print('dice', adv_dice)
-            print('dice', clean_dice)
-            dices.append(clean_dice.detach().cpu().numpy())
+            # print('dice', clean_dice)
+            clean_dice = clean_dice.detach().cpu().numpy()
+            sub_dices.append(clean_dice)
+            pbar.set_description('%2.2f clean dice %f' % (((k + 1) / m * 100),clean_dice))
+        qbar.set_description('%2.2f dice %f' % (((i + 1) /len_train  * 100), np.mean(sub_dices)))
+        # print('sub_dice', np.mean(sub_dices))
+        dices+=sub_dices
             # print('done')
     # print(str('train: {:s} | epoch_batch: {:d} | loss: {:f}  | Acc: {:.3f} | Se: {:.3f} | Sp: {:.3f}'
     #           '| Background_IOU: {:f}, vessel_IOU: {:f}').format(model_name, epoch, loss.item(), Acc, Se, Sp,
