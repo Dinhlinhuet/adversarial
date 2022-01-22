@@ -28,7 +28,7 @@ def dice_score(pred, encoded_target):
     """
     
     output = F.softmax(pred, dim = 1)
-    
+    # print('out', output)
     eps = 1
  
     intersection = output * encoded_target
@@ -87,14 +87,14 @@ def combined_loss(pred, target, device, n_classes):
     :param pred: N x C x H x W
     :param target: N x H x W
     """
-    
+
+    # target = target.float()
     weights = estimate_weights(target.float())
     weights = weights.to(device)
-    # print('pred,target', pred.size(), target.size())
-    cross = cross_entropy_loss(pred, target, weights)
+    # print('pred,target', pred.size(), target.size(), pred.dtype, weights.dtype)
+    cross = cross_entropy_loss(pred, target.long(), weights)
     # print('combine')
-    target_oh = make_one_hot(target.long(), n_classes, device)
-    
+    target_oh = make_one_hot(target, n_classes, device)
     dice = dice_loss(pred, target_oh)
     
     loss = cross + dice

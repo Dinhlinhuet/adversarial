@@ -13,13 +13,14 @@ from sklearn.model_selection import train_test_split
 from torchsummary import summary
 from collections import defaultdict
 import copy
-import pickle
 import time
-
+from os import path
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+print(path.dirname(path.dirname(path.abspath(__file__))))
 from optparse import OptionParser
 
-from dataset.dataset import SampleDataset
-from model import UNet, SegNet, DenseNet
+from dataset.dataset import SampleDataset, SegmentDataset
+from model import UNet, SegNet, DenseNet, cenet
 from util import save_metrics, print_metrics
 from loss import combined_loss
 
@@ -48,18 +49,12 @@ def get_args():
                         help='path to latest checkpoint (default: none)')
     parser.add_option('--start-epoch', default=0, type=int, metavar='N',
                         help='manual epoch number (useful on restarts)')
-    parser.add_option('--save-dir', default='./checkpoints/combine/', type='string', metavar='SAVE',
+    parser.add_option('--save-dir', default='./checkpoints/', type='string', metavar='SAVE',
                         help='directory to save checkpoint (default: none)')
     parser.add_option('--workers', default=32, type=int, metavar='N',
                         help='number of data loading workers (default: 32)')
-    parser.add_option('--device1', dest='device1', default=0, type='int',
+    parser.add_option('--device', dest='device', default=0, type='int',
                       help='device1 index number')
-    parser.add_option('--device2', dest='device2', default=-1, type='int',
-                      help='device2 index number')
-    parser.add_option('--device3', dest='device3', default=-1, type='int',
-                      help='device3 index number')
-    parser.add_option('--device4', dest='device4', default=-1, type='int',
-                      help='device4 index number')
 
     (options, args) = parser.parse_args()
     return options
@@ -68,54 +63,31 @@ def train_net(model, args):
     
     data_path = args.data_path
     num_epochs = args.epochs
-    gpu = args.gpu
     n_classes = args.classes
-    print('nclass', n_classes)
 
     # set device configuration
-    device_ids = []
-
-    if gpu == 'gpu' :
-        
-        if not torch.cuda.is_available() :
-            print("No cuda available")
-            raise SystemExit
-            
-        device = torch.device(args.device1)
-        
-        device_ids.append(args.device1)
-        
-        if args.device2 != -1 :
-            device_ids.append(args.device2)
-            
-        if args.device3 != -1 :
-            device_ids.append(args.device3)
-        
-        if args.device4 != -1 :
-            device_ids.append(args.device4)
-        
-    
-    else :
-        device = torch.device("cpu")
-    
-    if len(device_ids) > 1:
-        model = nn.DataParallel(model, device_ids = device_ids)
+    device = torch.device(args.device)
 
     model = model.to(device)
 
-    # set image into training and validation dataset
-    
-    # train_dataset = SampleDataset(data_path, n_classes, n_channels, 'train','UNet','DAG_A','0','org', args.width, args.height)
-    train_dataset = SampleDataset(data_path, n_classes, n_channels, 'train','UNet', 'ifgsm', '1','org', args.width, args.height)
-    val_dataset = SampleDataset(data_path, n_classes, n_channels, 'val', 'UNet', 'ifgsm', '1', 'org', args.width, args.height)
-    train_sampler = SubsetRandomSampler(np.arange(len(train_dataset)))
-    val_sampler = SubsetRandomSampler(np.arange(len(val_dataset)))
-    # train_indices, val_indices = train_test_split(np.arange(len(train_dataset)), test_size=0.2, random_state=42)
-    # train_sampler = SubsetRandomSampler(train_indices)
-    # val_sampler = SubsetRandomSampler(val_indices)
+    #for fundus and brain
+    if 'octa' in data_path:
+        train_dataset = SampleDataset(data_path, n_classes, n_channels, mode= 'train',
+            data_type='org',width=args.width,height=args.height)
+        train_indices, val_indices = train_test_split(np.arange(len(train_dataset)), test_size=0.2, random_state=42)
+        train_sampler = SubsetRandomSampler(train_indices)
+        val_sampler = SubsetRandomSampler(val_indices)
+    else:
+        train_dataset = SegmentDataset(data_path, n_classes, n_channels, mode= 'train', gen_mode=None,model=None,
+            type=None,target_class=None,data_type='org',width=args.width,height=args.height, mask_type=None, suffix=None)
+        val_dataset = SegmentDataset(data_path, n_classes, n_channels, mode= 'val', gen_mode=None,model=None,
+            type=None,target_class=None,data_type='org',width=args.width,height=args.height, mask_type=None, suffix=None)
+        train_sampler = SubsetRandomSampler(np.arange(len(train_dataset)))
+        val_sampler = SubsetRandomSampler(np.arange(len(val_dataset)))
     print('total train image : {}'.format(len(train_sampler)))
     print('total val image : {}'.format(len(val_sampler)))
-    print('batch size',args.batch_size)
+
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
@@ -158,6 +130,8 @@ def train_net(model, args):
         
     elif args.model == 'DenseNet':
         model_path = os.path.join(model_folder, 'DenseNet.pth')
+    elif args.model == 'CENet':
+        model_path = os.path.join(model_folder, 'CENet.pth')
     print('save path', model_path)
     # set optimizer
     
@@ -192,10 +166,11 @@ def train_net(model, args):
             # print('img', images.size())
             images = images.to(device).float()
             masks = masks.to(device).long()
+            # images = Variable(images, volatile=False)
+            # masks = Variable(masks, volatile=False)
             optimizer.zero_grad()
             outputs = model(images)
             # print('ch', np.unique(masks.cpu().numpy()))
-            # print('mask', masks.size())
             loss, cross, dice = combined_loss(outputs, masks.squeeze(1), device, n_classes)
 
             save_metrics(metrics, images.size(0), loss, cross, dice)
@@ -221,6 +196,7 @@ def train_net(model, args):
 
         # validate model
         for images, masks in val_loader:
+            # print('b', type(images))
             images = images.to(device).float()
             masks = masks.to(device).long()
             outputs = model(images)
@@ -245,13 +221,14 @@ def train_net(model, args):
             best_along_dice = epoch_dice
             best_along_train_loss = values[0]
             best_along_train_dice = values[-1]
-            model_copy = copy.deepcopy(model)
-            model_copy = model_copy.cpu()
+            # model_copy = copy.deepcopy(model)
+            # model_copy = model
+            # model_copy = model_copy.cpu()
 
-            model_state_dict = model_copy.module.state_dict() if len(device_ids) > 1 else model_copy.state_dict()
+            model_state_dict = model.state_dict()
             torch.save(model_state_dict, model_path)
 
-            del model_copy
+            # del model_copy
 
             counter = 0
 
@@ -290,7 +267,8 @@ if __name__ == "__main__":
         
     elif args.model == 'DenseNet':
         model = DenseNet(in_channels = n_channels, n_classes = n_classes)
-    
+    elif args.model == 'CENet':
+        model = cenet.CE_Net_(num_channels = n_channels, num_classes = n_classes)
     else :
         print("wrong model : must be UNet, SegNet, or DenseNet")
         raise SystemExit

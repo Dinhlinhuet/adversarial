@@ -4,6 +4,7 @@ import os
 import cv2
 import torch
 from model.AgNet.core.models import *
+# from model.AgNet.core.models_tp import *
 # import cPickle as pkl
 from torch.autograd import Variable
 

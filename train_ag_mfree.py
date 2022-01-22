@@ -150,7 +150,6 @@ best_dice = 1e10
 optimizers = []
 learning_rate = 0.01
 ws = torch.empty([0])
-model = model.double()
 for i, (images, masks) in enumerate(train_loader):
     w = Variable(torch.atan(images.clone()*2-1), requires_grad=True)
     # w = torch.zeros_like(image, requires_grad=True).to(device)
@@ -186,14 +185,14 @@ for epoch in range(start_epoch,num_epochs+start_epoch):
         adv_target_oh = make_one_hot(adv_target, n_class, device)
         masks_oh = make_one_hot(masks, n_class, device)
         masks = masks.long()
-        org_images = org_images.to(device).double()
+        org_images = org_images.to(device).float()
         sub_dices = []
         pbar = tqdm(range(m), leave=False)
         for k in pbar:
-            images = images.to(device).double()
+            images = images.to(device).float()
             images = 1 / 2 * (nn.Tanh()(ws[i]) + 1)
-            images = images.to(device).double()
-            # print('img', images.size(), images.type())
+            images = images.to(device).float()
+            # print('img', images.size())
             # tmp_gt = masks
             # adv_target = adv_target.long()
             #     clean_dice = ag_dice_loss(predictions, ground_truth)
@@ -201,7 +200,7 @@ for epoch in range(start_epoch,num_epochs+start_epoch):
             # img, masks, tmp_gt, img_shape,label_ori = get_data(args.data_path, path, img_size=args.img_size, gpu=args.use_gpu)
             optimizer.zero_grad()
             optimizers[i].zero_grad()
-            # print('img', images.size(), images.type())
+    
             out, side_5, side_6, side_7, side_8 = model(images)
             # print('out', out.size(), masks.size())
             out = torch.log(softmax_2d(out) + EPS)

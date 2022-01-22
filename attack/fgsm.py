@@ -3,25 +3,28 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch.autograd import Variable
 import torch.nn as nn
-from loss import combined_loss
-from model.AgNet.core.utils import dice_loss
+from loss import combined_loss, dice_loss
+# from model.AgNet.core.utils import dice_loss
 from pytorch_msssim import ssim
 from util import make_one_hot
 
-def i_fgsm(idx, model, n_class, x, y, y_target, targeted=False, eps=0.03, alpha=1, iteration=20, x_val_min=-1, x_val_max=1,
-           background_class=0,device='cuda:0',verbose=False):
+def i_fgsm(idx, model, n_class, x, y, y_target, targeted=False, eps=0.03, alpha=1, iteration=20, x_val_min=0, x_val_max=1,
+           background_class=0,device='cuda:0',args=None):
     alpha = eps/iteration
     x_adv = Variable(x.data, requires_grad=True)
+    print('target', targeted)
     # x_adv = x
     # x_adv.require_grad()
     # y=y.long()
     y_target=y_target.long()
-    # print('ytar', y_target.size())
+    y_target_oh = make_one_hot(y_target, n_class, device)
+    y_oh = make_one_hot(y, n_class, device)
     # loss_func = nn.CrossEntropyLoss()
     loss_func = combined_loss
-    # loss_func = dice_loss
+    if args.model == 'AgNet':
+        loss_func = dice_loss
     # loss_func = nn.NLLLoss()
-    # print('xadv', x_adv.size())
+    # print('xadv', x_adv.size(), y_target.size())
     # org = x_adv.clone().detach()
     # print('sub', torch.max(abs((org * 255) - (org * 255).int())))
     softmax_2d = nn.Softmax2d()
@@ -29,29 +32,35 @@ def i_fgsm(idx, model, n_class, x, y, y_target, targeted=False, eps=0.03, alpha=
     for i in range(iteration):
         # print('i',i)
         #normal model
-        h_adv = model(x_adv)
-        # print('xadv', x_adv.size())
-        # out, side_5, side_6, side_7, side_8 = model(x_adv)
-        # output = torch.log(softmax_2d(side_8) + EPS)
-        # # print('output', output.size())
-        # _, h_adv = torch.max(output, 1)
-        # h_adv = h_adv.float()
+        if args.model == 'AgNet':
+            # print('xadv', x_adv.size(), x_adv.dtype)
+            out, side_5, side_6, side_7, side_8 = model(x_adv)
+            h_adv = torch.log(softmax_2d(side_8) + EPS)
+            # print('output', output.size())
+            # _, h_adv = torch.max(output, 1)
+            # h_adv = h_adv.float()
+            # print("hadv", h_adv.size())
+            if targeted:
+                cost = loss_func(h_adv, y_target_oh)
+            else:
+                cost = -loss_func(h_adv, y_oh)
+        else:
+            h_adv = model(x_adv)
+            # print("hadv", h_adv.shape)
+            if targeted:
+                cost, _, _ = loss_func(h_adv, y_target, device, n_class)
+            else:
+                cost, _, _ = loss_func(h_adv, y, device, n_class)
+            if not targeted:
+                cost = -cost
 
-        # print("hadv", h_adv.size())
-
-        # if targeted:
-        #     cost = loss_func(h_adv, y)
-        # else:
-        #     cost = -loss_func(h_adv, y)
         # cost, _, _ = loss_func(h_adv, y, device, 2)
-        cost, _, _ = loss_func(h_adv, y_target, device, n_class)
+        # cost, _, _ = loss_func(h_adv, y_target, device, n_class)
         # output = torch.argmax(output, 1)
         # print('uot', out.size())
         # h_adv = make_one_hot(output, n_class, device)
 
         # cost = loss_func(output, y_target)
-        if not targeted:
-            cost= -cost
 
         # print('xadv', x_adv.size())
         model.zero_grad()
@@ -82,6 +91,7 @@ def i_fgsm(idx, model, n_class, x, y, y_target, targeted=False, eps=0.03, alpha=
         # print('xadv', torch.unique((x_adv*255).int().detach()))
         # print('equa', torch.all(torch.eq(org, x_adv*255)))
         x_adv = Variable(x_adv.data, requires_grad=True)
+        # print('f', x_adv.dtype)
         # print('equa', torch.max(abs((org * 255).int() - (x_adv * 255).int())))
         # final = x_adv.clone().detach()
         # print('final', torch.min(final), torch.max(final))

@@ -7,6 +7,7 @@ from model.AgNet.core.blocks import M_Conv
 
 from model.AgNet.core.blocks import M_Decoder_my_10
 from model.AgNet.guided_filter_pytorch.guided_filter_attention import FastGuidedFilter_attention
+# from model.AgNet.guided_filter_pytorch.guided_filter_attention_bk import FastGuidedFilter_attention
 
 
 class AG_Net(nn.Module):
@@ -65,7 +66,9 @@ class AG_Net(nn.Module):
         FG = torch.cat([self.conv4(x_4), conv4], dim=1)
         N, C, H, W= FG.size()
         FG_small = F.upsample(FG, size=(H//2, W//2), mode='bilinear')
+        # print('type', out.dtype, FG_small.dtype)
         out = self.gf(FG_small, out, FG,self.attentionblock5(FG_small,out), 0)
+        # print('out type', out.dtype)
         up5 = self.up5(out)
 
         FG = torch.cat([self.conv3(x_3), conv3], dim=1)
@@ -129,6 +132,6 @@ class GridAttentionBlock(nn.Module):
         f = F.relu(theta_x + phi_g, inplace=True)
 
         sigm_psi_f = F.sigmoid(self.psi(f))
-
+        # print('phi', sigm_psi_f.dtype)
         return sigm_psi_f
 

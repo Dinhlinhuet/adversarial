@@ -13,11 +13,11 @@ class FastGuidedFilter_attention(nn.Module):
         self.eps = eps
         self.boxfilter = BoxFilter(r)
         self.epss = 1e-12
-        self.upsamples = [Upsample(512,512)
-        , Upsample(256,256)
-        , Upsample(128,128)
-        , Upsample(64,64)]
-        self.upsamples = torch.nn.ModuleList(self.upsamples)
+        # self.upsamples = [Upsample(512,512)
+        # , Upsample(256,256)
+        # , Upsample(128,128)
+        # , Upsample(64,64)]
+        # self.upsamples = torch.nn.ModuleList(self.upsamples)
 
     def forward(self, lr_x, lr_y, hr_x, l_a, idx):
         n_lrx, c_lrx, h_lrx, w_lrx = lr_x.size()
@@ -71,17 +71,17 @@ class FastGuidedFilter_attention(nn.Module):
         # print('A', A.size())
         # print('hrx w', h_hrx, w_hrx)
         ## mean_A; mean_b
-        # mean_A = F.upsample(A, (h_hrx, w_hrx), mode='bilinear')
-        # mean_b = F.upsample(b, (h_hrx, w_hrx), mode='bilinear')
-        mean_A = self.upsamples[idx](A,output_size=(h_hrx, w_hrx))
-        mean_b = self.upsamples[idx](b,output_size=(h_hrx, w_hrx))
+        mean_A = F.upsample(A, (h_hrx, w_hrx), mode='bilinear')
+        mean_b = F.upsample(b, (h_hrx, w_hrx), mode='bilinear')
+        # mean_A = self.upsamples[idx](A,output_size=(h_hrx, w_hrx))
+        # mean_b = self.upsamples[idx](b,output_size=(h_hrx, w_hrx))
 
         return (mean_A*hr_x+mean_b).double()
 
 class Upsample(nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, out_channels, kernel_size=(3,3), stride=(2,2)):
         super(Upsample, self).__init__()
-        self.upsample = nn.ConvTranspose2d(in_channels, out_channels, (3, 3), stride=(2, 2), padding=(1, 1))
+        self.upsample = nn.ConvTranspose2d(in_channels, out_channels, kernel_size, stride=stride, padding=(1, 1))
 
     def forward(self, x, output_size):
         return self.upsample(x, output_size)

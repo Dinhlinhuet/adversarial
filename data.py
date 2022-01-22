@@ -6,6 +6,7 @@ from torchvision import transforms
 #from scipy.misc import cv2.imread, imresize
 import cv2
 import time
+import random as rd
 
 
 class DefenseDataset(Dataset):
@@ -16,13 +17,30 @@ class DefenseDataset(Dataset):
         # self.attack = attack
         self.data_path = data_path
         self.images=[]
-        self.adv_images = []
+        self.adv_npz_list = []
         npz_file = './data/{}/{}_{}.npz'.format(data_path,data_path, phase)
         # adv_npz_file = './data/{}/denoiser/{}_adv_{}_{}_{}.npz'.format(data_path, data_path, phase, 'SegNet', 'DAG_C')
         # octa3mfull
         # adv_npz_file = './data/{}/denoiser/{}_adv_{}_{}_{}_{}.npz'.format(data_path,data_path,phase, 'UNet', 'DAG_A', '0')
-        adv_npz_file = './data/{}/denoiser/{}_adv_{}_{}_{}_{}.npz'.format(data_path, data_path, phase, 'UNet', 'ifgsm',
-                                                                          '1')
+        #fundus
+        adv_list = []
+        combine = []
+        if data_path == 'fundus':
+            for cls in ['m1','m2']:
+                combine.append(('ifgsm',cls))
+                # adv_npz_file = './data/{}/denoiser/{}_adv_{}_{}_{}_{}.npz'.format(data_path, data_path, phase, 'UNet', 'ifgsm',
+                #                                                               cls)
+                # adv_list.append(adv_npz_file)
+        elif data_path == 'octa3mfull':
+            for cls in ['1','2']:
+                combine.append(('DAG_C', cls))
+                # adv_npz_file = './data/{}/denoiser/{}_adv_{}_{}_{}_{}.npz'.format(data_path,data_path,phase, 'UNet', 'DAG_C', cls)
+                # adv_list.append(adv_npz_file)
+            combine.append(('DAG_A', '0'))
+            # adv_npz_file = './data/{}/denoiser/{}_adv_{}_{}_{}_{}.npz'.format(data_path, data_path, phase, 'UNet',
+            #                                                                   'DAG_A', '0')
+            # adv_list.append(adv_npz_file)
+
         #brain
         # adv_npz_file = './data/{}/denoiser/{}_adv_{}_{}_{}_{}.npz'.format(data_path, data_path, phase, 'DenseNet', 'ifgsm',
         #                                                                   '1')
@@ -30,37 +48,43 @@ class DefenseDataset(Dataset):
         #                                                                   'pgd','1')
         if not os.path.exists('./data/{}/denoiser/'.format(data_path)):
             os.mkdir('./data/{}/denoiser/'.format(data_path))
-        if not os.path.exists(adv_npz_file):
-            print("not found", adv_npz_file)
-            #fundus
-            adv_dir = './output/adv/{}/{}/{}/{}/{}/'.format(data_path, phase, 'UNet', 'ifgsm','1')
-            # adv_dir = './output/adv/{}/{}/{}/{}/{}/'.format(data_path, phase, 'UNet', 'pgd','1')
-            # brain
-            # adv_dir = './output/adv/{}/{}/{}/{}/{}/'.format(data_path, phase, 'UNet', 'pgd','1')
-            # adv_dir = './output/adv/{}/{}/{}/{}/{}/'.format(data_path, phase, 'UNet', 'DAG_A', '0')
-            # adv_dir = './output/adv/{}/{}/{}/{}/'.format(data_path, phase, 'SegNet', 'DAG_C')
-            def filename(x):
-                return int(x[:-4])
+        for comb in combine:
+            adv_images = []
+            adv_npz_file = './data/{}/denoiser/{}_adv_{}_{}_{}_{}.npz'.format(data_path, data_path, phase, 'UNet',
+                                                                              comb[0],comb[1])
+            adv_list.append(adv_npz_file)
+            if not os.path.exists(adv_npz_file):
+                print("not found", adv_npz_file)
+                #fundus
+                adv_dir = './output/adv/{}/{}/{}/{}/{}/'.format(data_path, phase, 'UNet', comb[0],comb[1])
+                # adv_dir = './output/adv/{}/{}/{}/{}/{}/'.format(data_path, phase, 'UNet', 'pgd','1')
+                # brain
+                # adv_dir = './output/adv/{}/{}/{}/{}/{}/'.format(data_path, phase, 'UNet', 'pgd','1')
+                # adv_dir = './output/adv/{}/{}/{}/{}/{}/'.format(data_path, phase, 'UNet', 'DAG_A', '0')
+                # adv_dir = './output/adv/{}/{}/{}/{}/'.format(data_path, phase, 'SegNet', 'DAG_C')
+                def filename(x):
+                    return int(x[:-4])
 
-            ls_names = sorted(os.listdir(adv_dir), key=filename)
-            # print('lsname', ls_names)
-            for img_name in ls_names:
-                if 'png' in img_name:
-                    img_path = os.path.join(adv_dir, img_name)
-                    # print('label', label_path)
-                    if channels == 1:
-                        img = cv2.imread(img_path, 0)
-                    else:
-                        img = cv2.imread(img_path)
-                    # img = cv2.resize(img,(256,256))/ 255
-                    img = img / 255
-                    self.adv_images.append(img)
-                    # print('checklabel', np.unique(data[i][1]))
-            np.savez_compressed(adv_npz_file, a=self.adv_images)
-        else:
-            print('load adv', adv_npz_file)
-            adv_data = np.load(adv_npz_file)
-            self.adv_images = adv_data['a']
+                ls_names = sorted(os.listdir(adv_dir), key=filename)
+                # print('lsname', ls_names)
+                for img_name in ls_names:
+                    if 'png' in img_name:
+                        img_path = os.path.join(adv_dir, img_name)
+                        # print('label', label_path)
+                        if channels == 1:
+                            img = cv2.imread(img_path, 0)
+                        else:
+                            img = cv2.imread(img_path)
+                        # img = cv2.resize(img,(256,256))/ 255
+                        img = img / 255
+                        adv_images.append(img)
+                        # print('checklabel', np.unique(data[i][1]))
+                np.savez_compressed(adv_npz_file, a=adv_images)
+            else:
+                print('load adv', adv_npz_file)
+                adv_data = np.load(adv_npz_file)
+                adv_images = adv_data['a']
+            self.adv_npz_list.append(adv_images)
         print('load clean', npz_file)
         data = np.load(npz_file)
         self.images = data['a']
@@ -72,7 +96,10 @@ class DefenseDataset(Dataset):
         image = self.images[index]
         labels = self.labels[index]
 
-        adv_image = self.adv_images[index]
+        num_adv_type = len(self.adv_npz_list)-1
+        i = rd.randint(0,num_adv_type)
+        adv_file = self.adv_npz_list[i]
+        adv_image = adv_file[index]
         # adv_labels = self.adv_labels[index]
 
         # cv2.imwrite('./data/brain/{}.png'.format(index), image * 255)
@@ -85,7 +112,7 @@ class DefenseDataset(Dataset):
         ])
 
         image = torch_transform(image)
-        labels = torch.from_numpy(labels).unsqueeze(0)
+        # labels = torch.from_numpy(labels).unsqueeze(0)
         # print('label', labels.size())
         # labels = torch_transform(labels)
         adv_image = torch_transform(adv_image)
@@ -93,7 +120,7 @@ class DefenseDataset(Dataset):
         return image, adv_image, labels
 
     def __len__(self):
-        return len(self.adv_images)
+        return len(self.images)
 
 
 def augment(imgs, config, train):

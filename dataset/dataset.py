@@ -16,101 +16,169 @@ def filename(x):
     return int(x[1:-4])
 
 class SampleDataset(Dataset):
+    def __init__(self, root_dir, num_class, channels, mode, model=None, type=None, target_class=None, data_type='org',
+        width = 256, height = 256):
+        self.num_classes = num_class
+        self.data_path = root_dir
+        train_img_dir = './data/{}/train/imgs/'.format(root_dir)
+        test_img_dir = './data/{}/test/imgs/'.format(root_dir)
+        train_label_dir = './data/{}/train/gt/'.format(root_dir)
+        test_label_dir = './data/{}/test/gt/'.format(root_dir)
+        # test_folder = './data/{}/512/test/'.format(root_dir)
+        if not os.path.exists(train_img_dir):
+            os.makedirs(train_img_dir)
+        if not os.path.exists(test_img_dir):
+            os.makedirs(test_img_dir)
+        if not os.path.exists(train_label_dir):
+            os.makedirs(train_label_dir)
+        if not os.path.exists(test_label_dir):
+            os.makedirs(test_label_dir)
+        # root = './data/OCTA-500/OCTA_3M/'
+        root = './data/{}/'.format(self.data_path)
+        self.img_dir = './data/OCTA-500/{}/imgs/'.format(self.data_path)
+        self.label_dir = './data/OCTA-500/{}/gt/'.format(self.data_path)
+        if mode=='train':
+            npz_file = './data/{}/{}_train.npz'.format(self.data_path,self.data_path)
+        elif mode=='test':
+            if data_type=='org':
+                npz_file = './data/{}/{}_test.npz'.format(self.data_path,self.data_path)
+                # npz_file = './data/{}/512/{}_test.npz'.format(self.data_path, self.data_path)
+            else:
+                npz_file = './data/{}/{}_adv_{}_{}_{}.npz'.format(self.data_path,self.data_path, model, type, target_class)
+                npz_org_file = './data/{}/{}_test.npz'.format(self.data_path, self.data_path)
+                # self.img_dir = './output/adv/{}/{}/{}/'.format(self.data_path,model, type)
+                self.img_dir = './output/adv/{}/{}/{}/{}/'.format(self.data_path, model, type, target_class)
+        else:
+            npz_file = './data/{}/{}_test.npz'.format(self.data_path,self.data_path)
+            self.img_dir = './data/{}/test/imgs/'.format(self.data_path,self.data_path)
+            # npz_file = './data/{}/{}_train.npz'.format(self.data_path, self.data_path)
+            # self.img_dir = './data/{}/train/imgs/'.format(self.data_path, self.data_path)
+        self.images = []
+        self.labels = []
 
-    # def __init__(self, root_dir, mode, model='', type='', data_type=''):
-    #     self.num_classes = 2
-    #     self.data_path = root_dir
-    #     self.img_dir = './data/kaggle_3m/'
-    #     self.label_dir = './data/kaggle_3m/'
-    #     if mode=='train':
-    #         npz_file = './data/{}/{}_train.npz'.format(self.data_path,self.data_path)
-    #     elif mode=='test':
-    #         if data_type=='org':
-    #             npz_file = './data/{}/{}_test.npz'.format(self.data_path,self.data_path)
-    #         else:
-    #             npz_file = './data/{}/{}_adv_{}_{}.npz'.format(self.data_path,self.data_path, model, type)
-    #             self.img_dir = './output/adv/{}/{}/{}/'.format(self.data_path,model, type)
-    #     else:
-    #         # npz_file = './data/{}/{}_adv_{}_{}.npz'.format(self.data_path,self.data_path, model, type)
-    #         npz_file = './data/{}/{}_test.npz'.format(self.data_path, self.data_path)
-    #         # self.img_dir = './data/{}/{}/org_test/'.format(self.data_path,self.data_path)
-    #         self.img_dir = './data/{}/test/imgs/'.format(self.data_path)
-    #     self.images = []
-    #     self.labels = []
-    #     ratio = 0.8
-    #     # data form [images, labels]
-    #     # with open(self.data_path, 'rb') as fp:
-    #     #     data = pickle.load(fp)
-    #
-    #     # cm = plt.cm.jet
-    #     # cm = plt.get_cmap('gist_rainbow', 1000)
-    #     # cm= plt.get_cmap('viridis', 28)
-    #     if data_type=='org':
-    #         if not os.path.exists(npz_file):
-    #             print('not found existed dump, ',npz_file)
-    #             ls_folder = os.listdir(self.img_dir)
-    #             rd.seed(0)
-    #             rd.shuffle(ls_folder)
-    #             num_folder = len(ls_folder)
-    #             train_folder = ls_folder[:int(num_folder*ratio)]
-    #             test_folder = ls_folder[int(num_folder*ratio):]
-    #             for folder in train_folder:
-    #                 folder_dir = os.path.join(self.img_dir,folder)
-    #                 for img_name in os.listdir(folder_dir):
-    #                     if 'mask' not in img_name and 'tif' in img_name:
-    #                         img_path = os.path.join(folder_dir,img_name)
-    #                         label_path = os.path.join(folder_dir,img_name[:-4]+'_mask.tif')
-    #                         # print('label', label_path)
-    #                         img = cv2.imread(img_path)/255
-    #                         label = cv2.imread(label_path,0)/255
-    #                         self.images.append(img)
-    #                         self.labels.append(label)
-    #                         # print('checklabel', np.unique(data[i][1]))
-    #             np.savez_compressed('./data/{}/brain_train.npz'.format(self.data_path),a=self.images,b=self.labels)
-    #             images = []
-    #             labels = []
-    #             for folder in test_folder:
-    #                 folder_dir = os.path.join(self.img_dir,folder)
-    #                 for img_name in os.listdir(folder_dir):
-    #                     if 'mask' not in img_name:
-    #                         img_path = os.path.join(folder_dir,img_name)
-    #                         label_path = os.path.join(folder_dir,img_name[:-4]+'_mask.tif')
-    #                         img = cv2.imread(img_path)/255
-    #                         label = cv2.imread(label_path,0)/255
-    #                         images.append(img)
-    #                         labels.append(label)
-    #                         # print('checklabel', np.unique(data[i][1]))
-    #             np.savez_compressed('./data/{}/brain_test.npz'.format(self.data_path),a=images,b=labels)
-    #             self.images=images
-    #             self.labels=labels
-    #         else:
-    #             print('load ', npz_file)
-    #             data = np.load(npz_file)
-    #             self.images=data['a']
-    #             self.labels=data['b']
-    #     else:
-    #         if not os.path.exists(npz_file):
-    #             test_org_data = np.load('./data/{}/brain_test.npz'.format(self.data_path))
-    #             self.labels = test_org_data['b']
-    #             print('not found existed dump adv',npz_file)
-    #             def filename(x):
-    #                 return int(x[:-4])
-    #             print(self.img_dir)
-    #             ls_names = sorted(os.listdir(self.img_dir),key=filename)
-    #             for img_name in ls_names:
-    #                 if 'png' in img_name:
-    #                     img_path = os.path.join(self.img_dir, img_name)
-    #                     # print('label', label_path)
-    #                     img = cv2.imread(img_path) / 255
-    #                     self.images.append(img)
-    #                     # print('checklabel', np.unique(data[i][1]))
-    #             np.savez_compressed(npz_file, a=self.images, b=self.labels)
-    #         else:
-    #             print('load ',npz_file)
-    #             data = np.load(npz_file)
-    #             self.images = data['a']
-    #             self.labels = data['b']
+        ratio = 0.85
+        # data form [images, labels]
+        # with open(self.data_path, 'rb') as fp:
+        #     data = pickle.load(fp)
 
+        # cm = plt.cm.jet
+        # cm = plt.get_cmap('gist_rainbow', 1000)
+        # cm= plt.get_cmap('viridis', 28)
+        np.random.seed(1)
+        print(self.img_dir)
+        if data_type=='org':
+            #train and test org, generate adv
+            if not os.path.exists(npz_file):
+                print('not found existed dump', npz_file)
+                ls_name = os.listdir(self.label_dir)
+                total_img = len(ls_name)
+                idc = np.zeros((total_img))
+                idc[:int(total_img*ratio)]=1
+                np.random.shuffle(idc)
+                images = []
+                labels = []
+                i=0
+                for idx, train in enumerate(idc):
+                    img_name = ls_name[idx]
+                    if 'png' or 'bmp' in img_name:
+                        # print(self.img_dir,img_name[:-9]+'.png')
+                        img_path = os.path.join(self.img_dir,img_name.replace('_mask',''))
+                        label_path = os.path.join(self.label_dir,img_name)
+                        # print('label', label_path)
+                        # print('img path', img_path)
+                        if channels == 1:
+                            org_img = cv2.imread(img_path, 0)
+                        # print("imgname", img_name)
+                        else:
+                            org_img = cv2.imread(img_path)
+                        org_img = cv2.resize(org_img,(width,height))
+                        img= org_img/255
+                        label = cv2.imread(label_path,0)
+                        label = cv2.resize(label, (width, height),  interpolation= cv2.INTER_NEAREST)
+                        label[label < 100] = 0
+                        label[label > 150] = 255
+                        label[(label >= 100) & (label <= 150)] = 128
+                        unique = np.unique(label)
+                        for i, cl in enumerate(unique):
+                            label[label == cl] = i
+                        # print('after', np.unique(label))
+                        if train:
+                            self.images.append(img)
+                            self.labels.append(label)
+                            cv2.imwrite('{}/{}'.format(train_img_dir, img_name), org_img)
+                            cv2.imwrite('{}/{}'.format(train_label_dir, img_name), label)
+                        else:
+                            images.append(img)
+                            labels.append(label)
+                            # cv2.imwrite('{}/{}.png'.format(test_folder,i), org_img)
+                            i+=1
+                            cv2.imwrite('{}/{}'.format(test_img_dir, img_name), org_img)
+                            cv2.imwrite('{}/{}'.format(test_label_dir, img_name), label)
+                        # print('checklabel', np.unique(data[i][1]))
+                np.savez_compressed('{}/{}_train.npz'.format(root,self.data_path),a=self.images,b=self.labels)
+                np.savez_compressed('{}/{}_test.npz'.format(root,self.data_path),a=images,b=labels)
+            else:
+                #generate adv
+                print('load ', npz_file)
+                data = np.load(npz_file)
+                self.images=data['a']
+                self.labels=data['b']
+        else:
+            #test adv mode
+            if not os.path.exists(npz_file):
+                test_org_data = np.load(npz_org_file)
+                self.labels = test_org_data['b']
+                print('not found existed dump adv',npz_file)
+                def filename(x):
+                    return int(x[:-4])
+                ls_names = sorted(os.listdir(self.img_dir),key=filename)
+                for img_name in ls_names:
+                    if 'png' or 'bmp' in img_name:
+                        img_path = os.path.join(self.img_dir, img_name)
+                        # print('label', label_path)
+                        img = cv2.imread(img_path,0)
+                        # img = cv2.resize(img,(256,256))/ 255
+                        img = img/255
+                        self.images.append(img)
+                        # print('checklabel', np.unique(data[i][1]))
+                np.savez_compressed(npz_file, a=self.images, b=self.labels)
+            else:
+                print('load ',npz_file)
+                data = np.load(npz_file)
+                self.images = data['a']
+                self.labels = data['b']
+
+    def __len__(self):
+        return len(self.labels)
+        
+    def __getitem__(self, index):
+        # print("idx", index)
+        image = self.images[index]
+        labels = self.labels[index]
+        # print('uni', np.unique(labels))
+        # cv2.imwrite('./data/brain/{}.png'.format(index), image * 255)
+        # cv2.imwrite('./data/{}/test/imgs/{}.png'.format(self.data_path,index), image * 255)
+        # cv2.imwrite('./data/{}/test/labels/{}.png'.format(self.data_path,index), labels * 255)
+        # cv2.imwrite('./data/{}/test/imgs/{}.png'.format(self.data_path,index), image * 255)
+        # cv2.imwrite('./data/{}/test/labels/{}.png'.format(self.data_path,index), labels * 255)
+        # cv2.imwrite('./data/{}/train/imgs/{}.png'.format(self.data_path,index), image * 255)
+        # cv2.imwrite('./data/{}/train/labels/{}.png'.format(self.data_path,index), labels * 255)
+        # print('uniqe', np.unique(labels*255))
+        # cv2.imwrite('./data/{}/train/imgs/{}.png'.format(self.data_path,index), image * 255)
+        # cv2.imwrite('./data/{}/train/labels/{}.png'.format(self.data_path,index), labels * 255)
+        torch_transform = transforms.Compose([
+            transforms.ToTensor()
+        ])
+        
+        image = torch_transform(image)
+        labels = torch.from_numpy(labels).unsqueeze(0)
+        # labels = torch.from_numpy(labels)
+        # labels = torch_transform(labels)
+        # print('ll', labels.size())
+        # print('torh', torch.unique(labels).cpu().numpy())
+        return (image, labels)
+
+class SegmentDataset(SampleDataset):
 # # use only for train combine
 #     def __init__(self, root_dir, num_class, channels, mode, model, type, target_class, data_type, width, height):
 #         self.num_classes = num_class
@@ -238,11 +306,11 @@ class SampleDataset(Dataset):
                 org_img = cv2.resize(org_img, (height, width))
                 img = org_img / 255
                 label = cv2.imread(label_path, 0)
+                # label = 255-label
                 label[label < 100] = 0
                 label[label > 150] = 255
                 label[(label >= 100) & (label <= 150)] = 128
                 label = cv2.resize(label, (height, width), interpolation=cv2.INTER_NEAREST)
-                label = 255-label
                 cv2.imwrite('{}/{}'.format(out_img_dir, img_name), org_img)
                 cv2.imwrite('{}/{}'.format(out_label_dir, img_name), label)
                 unique = np.unique(label)
@@ -255,7 +323,8 @@ class SampleDataset(Dataset):
         return images, labels
 
 # normal
-    def __init__(self, root_dir, num_class, channels, mode, model, type, target_class, data_type, width, height):
+    def __init__(self, root_dir, num_class, channels, mode='train', gen_mode=None, model=None, type=None,
+                target_class=None, data_type='org', width=256, height=256, mask_type=0, suffix=''):
         self.num_classes = num_class
         self.data_path = root_dir
         # train_img_dir = './data/{}/train/imgs/'.format(root_dir)
@@ -289,8 +358,15 @@ class SampleDataset(Dataset):
         # self.label_dir = './data/lung_new/masks/'
         # self.img_dir = './data/eye/{}/imgs/'.format(mode)
         # self.label_dir = './data/eye/{}/gt/'.format(mode)
-        self.img_dir = './data/{}/{}/imgs/'.format(self.data_path,mode)
-        self.label_dir = './data/{}/{}/gt/'.format(self.data_path,mode)
+        if mode == 'adv':
+            self.img_dir = './data/{}/{}/imgs/'.format(self.data_path, gen_mode)
+            self.label_dir = './data/{}/{}/gt/'.format(self.data_path, gen_mode)
+        elif(self.data_path!='octafull'):
+                self.img_dir = './data/{}/{}/imgs/'.format(self.data_path,mode)
+                self.label_dir = './data/{}/{}/gt/'.format(self.data_path,mode)
+        else:
+            self.img_dir = './data/OCTA-500/{}/imgs/'.format(self.data_path)
+            self.label_dir = './data/OCTA-500/{}/gt/'.format(self.data_path)
         if mode=='train':
             npz_file = './data/{}/{}_train.npz'.format(self.data_path,self.data_path)
         elif mode == 'val':
@@ -300,22 +376,34 @@ class SampleDataset(Dataset):
                 npz_file = './data/{}/{}_test.npz'.format(self.data_path,self.data_path)
                 # npz_file = './data/{}/512/{}_test.npz'.format(self.data_path, self.data_path)
             else:
-                if target_class:
-                    npz_file = './data/{}/{}_adv_{}_{}_{}.npz'.format(self.data_path,self.data_path, model, type, target_class)
-                else:
-                    npz_file = './data/{}/{}_adv_{}_{}.npz'.format(self.data_path, self.data_path, model, type
-                                                                      )
+                # if mask_type !='':
+                #     npz_file = './data/{}/{}_adv_{}_{}_m{}.npz'.format(self.data_path,self.data_path, model, type,
+                #                                             mask_type)
+                # if target_class:
+                npz_file = './data/{}/{}/{}_adv_{}_{}_m{}t{}.npz'.format(self.data_path,suffix, self.data_path, model, type,
+                                                                         mask_type, target_class)
+                # else:
+                #     npz_file = './data/{}/{}_adv_{}_{}.npz'.format(self.data_path,suffix, self.data_path, model, type
+                #                                                       )
+                if not os.path.exists('./data/{}/{}/'.format(self.data_path,suffix)):
+                    os.makedirs('./data/{}/{}/'.format(self.data_path,suffix))
                 npz_org_file = './data/{}/{}_test.npz'.format(self.data_path, self.data_path)
                 # self.img_dir = './output/adv/{}/{}/{}/'.format(self.data_path,model, type)
-                self.img_dir = './output/adv/{}/{}/{}/{}/'.format(self.data_path, model, type, target_class)
+                # if mask_type !='':
+                #     self.img_dir = './output/adv/{}/{}/{}/{}/m{}/'.format(self.data_path, mode, model, type, mask_type)
+                # else:
+                self.img_dir = './output/adv/{}/{}/{}/{}/m{}t{}/'.format(self.data_path, mode, model, type,
+                                                                         mask_type, target_class)
                 # self.img_dir = './output/adv/{}/{}/{}/{}/'.format('fundus_512', model, type, target_class)
         else:
-            npz_file = './data/{}/{}_test.npz'.format(self.data_path,self.data_path)
-            self.img_dir = './data/{}/test/imgs/'.format(self.data_path)
+            npz_file = './data/{}/{}_{}.npz'.format(self.data_path,self.data_path, gen_mode)
+            self.img_dir = './data/{}/{}/imgs/'.format(self.data_path, gen_mode)
             # npz_file = './data/{}/{}_train.npz'.format(self.data_path, self.data_path)
             # self.img_dir = './data/{}/train/imgs/'.format(self.data_path)
             # npz_file = './data/{}/{}_val.npz'.format(self.data_path, self.data_path)
             # self.img_dir = './data/{}/val/imgs/'.format(self.data_path)
+        print('img dir ', self.img_dir)
+        print('npz file', npz_file, self.img_dir,  self.label_dir)
         self.images = []
         self.labels = []
 
@@ -369,167 +457,6 @@ class SampleDataset(Dataset):
                 self.images = data['a']
                 print(self.images.dtype)
                 self.labels = data['b']
-
-    # def __init__(self, root_dir, num_class, mode, model, type, target_class, data_type):
-    #     self.num_classes = num_class
-    #     self.data_path = root_dir
-    #     train_folder = './data/{}/train/'.format(root_dir)
-    #     test_folder = './data/{}/test/'.format(root_dir)
-    #     train_img_dir = './data/{}/train/imgs/'.format(root_dir)
-    #     test_img_dir = './data/{}/test/imgs/'.format(root_dir)
-    #     train_label_dir = './data/{}/train/labels/'.format(root_dir)
-    #     test_label_dir = './data/{}/test/labels/'.format(root_dir)
-    #     # test_folder = './data/{}/512/test/'.format(root_dir)
-    #     if not os.path.exists(train_img_dir):
-    #         os.makedirs(train_img_dir)
-    #     if not os.path.exists(test_img_dir):
-    #         os.makedirs(test_img_dir)
-    #     if not os.path.exists(train_label_dir):
-    #         os.makedirs(train_label_dir)
-    #     if not os.path.exists(test_label_dir):
-    #         os.makedirs(test_label_dir)
-    #     # self.img_dir = './data/kaggle_3m/'
-    #     # self.label_dir = './data/kaggle_3m/'
-    #     # root = './data/OCTA-500/OCTA_3M/'
-    #     root = './data/{}/'.format(self.data_path)
-    #     # root = './data/lung_new/'
-    #     # root = './data/lung/512/'
-    #     # self.img_dir = './data/lung/2d_images/'
-    #     # self.label_dir = './data/lung/2d_masks/'
-    #     # self.img_dir = './data/lung_new/images/'
-    #     # self.label_dir = './data/lung_new/masks/'
-    #     self.img_dir = './data/OCTA-500/OCTA_3M/Projection Maps/OCTA(FULL)/'
-    #     self.label_dir = './data/OCTA-500/OCTA_3M/GroundTruth/'
-    #     if mode=='train':
-    #         npz_file = './data/{}/{}_train.npz'.format(self.data_path,self.data_path)
-    #     elif mode=='test':
-    #         if data_type=='org':
-    #             npz_file = './data/{}/{}_test.npz'.format(self.data_path,self.data_path)
-    #             # npz_file = './data/{}/512/{}_test.npz'.format(self.data_path, self.data_path)
-    #         else:
-    #             npz_file = './data/{}/{}_adv_{}_{}_{}.npz'.format(self.data_path,self.data_path, model, type, target_class)
-    #             npz_org_file = './data/{}/{}_test.npz'.format(self.data_path, self.data_path)
-    #             # self.img_dir = './output/adv/{}/{}/{}/'.format(self.data_path,model, type)
-    #             self.img_dir = './output/adv/{}/{}/{}/{}/'.format(self.data_path, model, type, target_class)
-    #     else:
-    #         npz_file = './data/{}/{}_test.npz'.format(self.data_path,self.data_path)
-    #         self.img_dir = './data/{}/test/imgs/'.format(self.data_path,self.data_path)
-    #         # npz_file = './data/{}/{}_train.npz'.format(self.data_path, self.data_path)
-    #         # self.img_dir = './data/{}/train/imgs/'.format(self.data_path, self.data_path)
-    #     self.images = []
-    #     self.labels = []
-    #
-    #     ratio = 0.84
-    #     # data form [images, labels]
-    #     # with open(self.data_path, 'rb') as fp:
-    #     #     data = pickle.load(fp)
-    #
-    #     # cm = plt.cm.jet
-    #     # cm = plt.get_cmap('gist_rainbow', 1000)
-    #     # cm= plt.get_cmap('viridis', 28)
-    #     np.random.seed(1)
-    #     print(self.img_dir)
-    #     if data_type=='org':
-    #         #train and test org, generate adv
-    #         if not os.path.exists(npz_file):
-    #             print('not found existed dump', npz_file)
-    #             ls_name = os.listdir(self.label_dir)
-    #             total_img = len(ls_name)
-    #             idc = np.zeros((total_img))
-    #             idc[:int(total_img*ratio)]=1
-    #             np.random.shuffle(idc)
-    #             images = []
-    #             labels = []
-    #             i=0
-    #             for idx, train in enumerate(idc):
-    #                 img_name = ls_name[idx]
-    #                 if 'png' or 'bmp' in img_name:
-    #                     # print(self.img_dir,img_name[:-9]+'.png')
-    #                     img_path = os.path.join(self.img_dir,img_name.replace('_mask',''))
-    #                     label_path = os.path.join(self.label_dir,img_name)
-    #                     # print('label', label_path)
-    #                     # print('img path', img_path)
-    #                     org_img = cv2.imread(img_path,0)
-    #                     org_img = cv2.resize(org_img,(256,256))
-    #                     img= org_img/255
-    #                     label = cv2.imread(label_path,0)
-    #                     label = cv2.resize(label, (256, 256),  interpolation = cv2.INTER_NEAREST)
-    #                     unique = np.unique(label)
-    #                     for i, cl in enumerate(unique):
-    #                         label[label == cl] = i
-    #                     # print('after', np.unique(label))
-    #                     if train:
-    #                         self.images.append(img)
-    #                         self.labels.append(label)
-    #                     else:
-    #                         images.append(img)
-    #                         labels.append(label)
-    #                         # cv2.imwrite('{}/{}.png'.format(test_folder,i), org_img)
-    #                         i+=1
-    #                     # print('checklabel', np.unique(data[i][1]))
-    #             np.savez_compressed('{}/{}_train.npz'.format(root,self.data_path),a=self.images,b=self.labels)
-    #             np.savez_compressed('{}/{}_test.npz'.format(root,self.data_path),a=images,b=labels)
-    #         else:
-    #             #generate adv
-    #             print('load ', npz_file)
-    #             data = np.load(npz_file)
-    #             self.images=data['a']
-    #             self.labels=data['b']
-    #     else:
-    #         #test adv mode
-    #         if not os.path.exists(npz_file):
-    #             test_org_data = np.load(npz_org_file)
-    #             self.labels = test_org_data['b']
-    #             print('not found existed dump adv',npz_file)
-    #             def filename(x):
-    #                 return int(x[:-4])
-    #             ls_names = sorted(os.listdir(self.img_dir),key=filename)
-    #             for img_name in ls_names:
-    #                 if 'png' or 'bmp' in img_name:
-    #                     img_path = os.path.join(self.img_dir, img_name)
-    #                     # print('label', label_path)
-    #                     img = cv2.imread(img_path,0)
-    #                     # img = cv2.resize(img,(256,256))/ 255
-    #                     img = img/255
-    #                     self.images.append(img)
-    #                     # print('checklabel', np.unique(data[i][1]))
-    #             np.savez_compressed(npz_file, a=self.images, b=self.labels)
-    #         else:
-    #             print('load ',npz_file)
-    #             data = np.load(npz_file)
-    #             self.images = data['a']
-    #             self.labels = data['b']
-
-    def __len__(self):
-        return len(self.labels)
-        
-    def __getitem__(self, index):
-        # print("idx", index)
-        image = self.images[index]
-        labels = self.labels[index]
-        # print('uni', np.unique(labels))
-        # cv2.imwrite('./data/brain/{}.png'.format(index), image * 255)
-        # cv2.imwrite('./data/{}/test/imgs/{}.png'.format(self.data_path,index), image * 255)
-        # cv2.imwrite('./data/{}/test/labels/{}.png'.format(self.data_path,index), labels * 255)
-        # cv2.imwrite('./data/{}/test/imgs/{}.png'.format(self.data_path,index), image * 255)
-        # cv2.imwrite('./data/{}/test/labels/{}.png'.format(self.data_path,index), labels * 255)
-        # cv2.imwrite('./data/{}/train/imgs/{}.png'.format(self.data_path,index), image * 255)
-        # cv2.imwrite('./data/{}/train/labels/{}.png'.format(self.data_path,index), labels * 255)
-        # print('uniqe', np.unique(labels*255))
-        # cv2.imwrite('./data/{}/train/imgs/{}.png'.format(self.data_path,index), image * 255)
-        # cv2.imwrite('./data/{}/train/labels/{}.png'.format(self.data_path,index), labels * 255)
-        torch_transform = transforms.Compose([
-            transforms.ToTensor()
-        ])
-        
-        image = torch_transform(image)
-        labels = torch.from_numpy(labels).unsqueeze(0)
-        # labels = torch.from_numpy(labels)
-        # labels = torch_transform(labels)
-        # print('ll', labels.size())
-        # print('torh', torch.unique(labels).cpu().numpy())
-        return (image, labels)
-
 
 class AgDataset(SampleDataset):
 
@@ -630,7 +557,8 @@ class AgDataset(SampleDataset):
     # use only for train combine
 
     # normal
-    def __init__(self, root_dir, num_class, channels, mode, model, type, target_class, data_type, width, height):
+    def __init__(self, root_dir, num_class, channels, mode, model, type, target_class, data_type, width,
+                 height,mask_type, suffix):
         super(SampleDataset, self).__init__()
         self.num_classes = num_class
         self.data_path = root_dir
@@ -674,14 +602,23 @@ class AgDataset(SampleDataset):
                 npz_file = './data/{}/{}_test.npz'.format(self.data_path,self.data_path)
                 # npz_file = './data/{}/512/{}_test.npz'.format(self.data_path, self.data_path)
             else:
-                if target_class:
-                    npz_file = './data/{}/{}_adv_{}_{}_{}.npz'.format(self.data_path,self.data_path, model, type, target_class)
-                else:
-                    npz_file = './data/{}/{}_adv_{}_{}.npz'.format(self.data_path, self.data_path, model, type
-                                                                      )
+                # if mask_type != '':
+                # if target_class:
+                npz_file = './data/{}/{}/{}_adv_{}_{}_m{}t{}.npz'.format(self.data_path,suffix, self.data_path, model, type,
+                                                                       mask_type, target_class)
+                # elif target_class:
+                #     npz_file = './data/{}/{}_adv_{}_{}_{}.npz'.format(self.data_path,self.data_path, model, type, target_class)
+                # else:
+                #     npz_file = './data/{}/{}_adv_{}_{}.npz'.format(self.data_path,suffix, self.data_path, model, type
+                #                                                       )
+                if not os.path.exists('./data/{}/{}/'.format(self.data_path,suffix)):
+                    os.makedirs('./data/{}/{}/'.format(self.data_path,suffix))
                 npz_org_file = './data/{}/{}_test.npz'.format(self.data_path, self.data_path)
                 # self.img_dir = './output/adv/{}/{}/{}/'.format(self.data_path,model, type)
-                self.img_dir = './output/adv/{}/{}/{}/{}/'.format(self.data_path, model, type, target_class)
+                # if mask_type != '':
+                self.img_dir = './output/adv/{}/{}/{}/{}/m{}t{}/'.format(self.data_path, mode, model, type, mask_type, target_class)
+                # else:
+                #     self.img_dir = './output/adv/{}/{}/{}/{}/'.format(self.data_path, model, type, target_class)
                 # self.img_dir = './output/adv/{}/{}/{}/{}/'.format('fundus_512', model, type, target_class)
         else:
             npz_file = './data/{}/{}_test.npz'.format(self.data_path,self.data_path)

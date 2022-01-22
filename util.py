@@ -51,13 +51,14 @@ def make_one_hot(labels, num_classes, device):
     # print('lable', np.unique(labels.data.cpu().numpy()))
     # labels = torch.nn.functional.one_hot(labels,3)
     # print("label", labels.size())
+    labels = labels.long()
     one_hot = torch.FloatTensor(labels.size(0), num_classes, labels.size(2), labels.size(3)).zero_()
     one_hot = one_hot.to(device)
     target = one_hot.scatter_(1, labels.data, 1)
     return target
 
 
-def save_metrics(metrics, size, loss, cross = None, dice = None):
+def save_metrics(metrics, size, loss=None, cross = None, dice = None):
     '''
     loss value save in metrics
     '''
@@ -74,11 +75,11 @@ def save_metrics(metrics, size, loss, cross = None, dice = None):
 
     if dice is not None:
         metrics['dice'] += dice.detach().data.cpu().numpy() * size
+    if loss is not None:
+        metrics['loss'] += loss.detach().data.cpu().numpy() * size
 
-    metrics['loss'] += loss.detach().data.cpu().numpy() * size
 
-
-def save_denoise_metrics(metrics, size, loss, cross=None, dice=None):
+def save_denoise_metrics(metrics, size, loss=None, cross=None, dice=None):
     '''
     loss value save in metrics
     '''

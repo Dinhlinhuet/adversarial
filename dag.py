@@ -12,7 +12,8 @@ import cv2
 import torch.nn as nn
 import torch.nn.functional as F
 
-def DAG(args, idx, model,image,ground_truth,adv_target,num_iterations=20,gamma=0.07,no_background=True,background_class=0,device='cuda:0',verbose=False):
+def DAG(args, idx, model,image,ground_truth,adv_target,num_iterations=20,gamma=0.07,no_background=True,
+        background_class=0,device='cuda:0',verbose=False):
     '''
     Generates adversarial example for a given Image
     
@@ -39,16 +40,16 @@ def DAG(args, idx, model,image,ground_truth,adv_target,num_iterations=20,gamma=0
 
     '''
     print('input', image.size())
-    noise_total=[]
-    noise_iteration=[]
     prediction_iteration=[]
     image_iteration=[]
     background=None
-    # logits=model(image)
-    out, side_5, side_6, side_7, side_8 = model(image)
-    softmax_2d = nn.Softmax2d()
-    EPS = 1e-12
-    logits = torch.log(softmax_2d(side_8) + EPS)
+    if args.model != 'AgNet':
+        logits = model(image)
+    else:
+        out, side_5, side_6, side_7, side_8 = model(image)
+        softmax_2d = nn.Softmax2d()
+        EPS = 1e-12
+        logits = torch.log(softmax_2d(side_8) + EPS)
     # out = F.upsample(out, size=(image.size()[2], image.size()[3]), mode='bilinear')
 
     #normal model
@@ -65,14 +66,13 @@ def DAG(args, idx, model,image,ground_truth,adv_target,num_iterations=20,gamma=0
 
     if torch.all(torch.eq(ground_truth, adv_target)):
         # print('equally')
-        np_img = image[0].detach().cpu().numpy()
-        np_img = np.moveaxis(np_img, 0, -1)
-        image_iteration.append(np_img)
-        return _, _, _, _, _, image_iteration
+        return image
     for a in range(num_iterations):
-        # output=model(image)
-        out, side_5, side_6, side_7, side_8 = model(image)
-        output = torch.log(softmax_2d(side_8) + EPS)
+        if args.model != 'AgNet':
+            output = model(image)
+        else:
+            out, side_5, side_6, side_7, side_8 = model(image)
+            output = torch.log(softmax_2d(side_8) + EPS)
         # print('output', output.size())
         _,predictions=torch.max(output,1)
         prediction_iteration.append(predictions[0].cpu().numpy())
@@ -90,12 +90,7 @@ def DAG(args, idx, model,image,ground_truth,adv_target,num_iterations=20,gamma=0
         # print('condi', condition.size())
         if(condition.sum()==0):
             print("Condition Reached")
-            if a==0:
-                np_img = image[0].detach().cpu().numpy()
-                np_img = np.moveaxis(np_img, 0, -1)
-                image_iteration.append(np_img)
-                return _, _, _, _, _, image_iteration
-            image=None
+            return image
             break
 
         #Finding pixels to purturb
@@ -130,10 +125,10 @@ def DAG(args, idx, model,image,ground_truth,adv_target,num_iterations=20,gamma=0
         #Summation
         r_m_sum=r_m.sum()
         r_m_sum.requires_grad_()
-        print('rm0', r_m_sum)
+        # print('rm0', r_m_sum)
         # print('rms', r_m_sum.size())
         #Finding gradient with respect to image
-        r_m_grad=torch.autograd.grad(r_m_sum,image,retain_graph=True)
+        r_m_grad=torch.autograd.grad(r_m_sum,image,grad_outputs=torch.zeros_like(r_m_sum), retain_graph=True)
         #Saving gradient for calculation
         r_m_grad_calc=r_m_grad[0]
         # print('rmgrad', np.count_nonzero(r_m_grad_calc.cpu().numpy()))
@@ -141,12 +136,8 @@ def DAG(args, idx, model,image,ground_truth,adv_target,num_iterations=20,gamma=0
         r_m_grad_mag=r_m_grad_calc.norm()
         
         if(r_m_grad_mag==0):
-            print("Condition Reached, no gradient")
-            #image=None
-            np_img = image[0].detach().cpu().numpy()
-            np_img = np.moveaxis(np_img, 0, -1)
-            image_iteration.append(np_img)
-            return _, _, _, _, _, image_iteration
+            print("Condition Reached, no gradient",a)
+            return image
             break
         #Calculating final value of r_m
         r_m_norm=(gamma/r_m_grad_mag)*r_m_grad_calc
@@ -164,19 +155,5 @@ def DAG(args, idx, model,image,ground_truth,adv_target,num_iterations=20,gamma=0
         image=torch.clamp((image+r_m_norm),0,1)
         # print('clm', image.size())
         # np_img = image[0][0].detach().cpu().numpy()
-        np_img = image[0].detach().cpu().numpy()
-        np_img=np.moveaxis(np_img, 0, -1)
-        image_iteration.append(np_img)
-        # noise_total.append((image-orig_image)[0][0].detach().cpu().numpy())
-        # noise_iteration.append(r_m_norm[0][0].cpu().numpy())
-
-        if verbose:
-            print("Iteration ",a)
-            print("Change to the image is ",r_m_norm.sum())
-            print("Magnitude of grad is ",r_m_grad_mag)
-            print("Condition 1 ",condition1.sum())
-            if no_background:
-                print("Condition 2 ",condition2.sum())
-                print("Condition is", condition.sum()) 
-
-    return image, logits, noise_total, noise_iteration, prediction_iteration, image_iteration
+    np_img = image
+    return np_img

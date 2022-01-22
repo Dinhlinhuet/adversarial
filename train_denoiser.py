@@ -7,6 +7,7 @@ import sys
 from torch.autograd import Variable
 from torch.utils.data.dataset import Dataset
 from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 from torchvision import transforms
 from torch.utils.data.sampler import SubsetRandomSampler
 from torch.nn import DataParallel
@@ -17,6 +18,8 @@ from loss import onehot2norm, dice_loss, make_one_hot
 import copy
 import pickle
 import time
+import torch.multiprocessing as mp
+import torch.distributed as dist
 
 from optparse import OptionParser
 
@@ -48,8 +51,14 @@ def get_args():
                       help='image height')
     parser.add_option('--model', dest='model', type='string',
                       help='model name(UNet, SegNet, DenseNet)')
-    parser.add_option('--gpu', dest='gpu',type='string',
-                      default='gpu', help='gpu or cpu')
+    parser.add_option('--gpus', dest='gpus',type='int',
+                      default=1, help='gpu or cpu')
+    parser.add_option('-n', '--nodes', default=1, type='int', metavar='N',
+                        help='number of data loading workers (default: 4)')
+    parser.add_option('--nr', default=0, dest='nr', type='int',
+                        help='ranking within the nodes')
+    parser.add_option('--suffix', dest='suffix', type='string',
+                      default='', help='suffix to purpose')
     parser.add_option('--resume', default='', type='string', metavar='PATH',
                         help='path to latest checkpoint (default: none)')
     parser.add_option('--target_model', default='./checkpoints/', type='string', metavar='PATH',
@@ -60,8 +69,8 @@ def get_args():
                         help='directory to save checkpoint (default: none)')
     parser.add_option('--device1', dest='device1', default=0, type='int',
                       help='device1 index number')
-    parser.add_option('--device2', dest='device2', default=-1, type='int',
-                      help='device2 index number')
+    parser.add_option('--device', dest='device', default=-1, type='int',
+                      help='device index number')
     parser.add_option('--device3', dest='device3', default=-1, type='int',
                       help='device3 index number')
     parser.add_option('--device4', dest='device4', default=-1, type='int',
@@ -71,10 +80,10 @@ def get_args():
     return options
 
 def train_net(model, denoiser, args):
-    
+    # rank = args.nr * args.gpus + gpu
+    # dist.init_process_group(backend='nccl', init_method='env://', world_size=args.world_size, rank=rank)
     data_path = args.data_path
     num_epochs = args.epochs
-    gpu = args.gpu
     n_classes = args.classes
     # data_width = args.width
     # data_height = args.height
@@ -82,54 +91,72 @@ def train_net(model, denoiser, args):
     # set device configuration
     device_ids = []
 
-    if gpu == 'gpu' :
+    if args.gpus >= 1 :
         
         if not torch.cuda.is_available() :
             print("No cuda available")
             raise SystemExit
             
-        device = torch.device(args.device1)
-        
+        # device = torch.device(args.device1)
+        device = torch.device('cuda')
         device_ids.append(args.device1)
-        
-        if args.device2 != -1 :
-            device_ids.append(args.device2)
+        if args.device != -1 :
+            print('device', args.device)
+            device_ids.append(args.device)
+            device = torch.device('cuda:1')
             
         if args.device3 != -1 :
             device_ids.append(args.device3)
         
         if args.device4 != -1 :
             device_ids.append(args.device4)
-        
-    
+
     else :
         device = torch.device("cpu")
     
-    if len(device_ids) > 1:
-        # model = nn.DataParallel(model, device_ids = device_ids)
-        denoiser = nn.DataParallel(denoiser, device_ids=device_ids)
+    # if len(device_ids) > 1:
+    #     print('parallel')
+    #     # model = nn.DataParallel(model, device_ids = device_ids)
+    #     denoiser = nn.DataParallel(denoiser, device_ids=device_ids)
 
+    if isinstance(denoiser, DataParallel):
+        print('parallely')
+        params = denoiser.module.parameters()
+    else:
+        params = denoiser.parameters()
+    # torch.cuda.set_device(gpu)
+    # denoiser.cuda(gpu)
+    # denoiser = nn.parallel.DistributedDataParallel(denoiser, device_ids=[gpu])
+    # pytorch_total_params = sum(p.numel() for p in c_params)
+    # print('total denoiser params', pytorch_total_params)
+    optimizer = torch.optim.Adam(params)
     model = model.to(device)
+    # model.cuda(gpu)
     denoiser = denoiser.to(device)
+    for param in model.parameters():
+        param.requires_grad = False
     # ssim_module = pytorch_ssim.SSIM(window_size=11)
     # ssim_module = SSIM(data_range=1, size_average=True, channel=3)
     # ssim_module = ssim_module.to(device)
     # loss = loss.to(device)
 
     # set image into training and validation dataset
-    
-    train_dataset = DefenseDataset(data_path,'train', args.channels)
-    val_dataset = DefenseDataset(data_path, 'val', args.channels)
 
+    train_dataset = DefenseDataset(data_path,'train', args.channels)
+
+    train_indices, val_indices = train_test_split(np.arange(len(train_dataset)), test_size=0.2, random_state=42)
+    train_sampler = SubsetRandomSampler(train_indices)
+    val_sampler = SubsetRandomSampler(val_indices)
+    if 'fundus' in args.data_path:
+        val_dataset = DefenseDataset(data_path, 'val', args.channels)
+        train_sampler = SubsetRandomSampler(np.arange(len(train_dataset)))
+        val_sampler = SubsetRandomSampler(np.arange(len(val_dataset)))
     print('total image : {}'.format(len(train_dataset)*2))
 
-    # train_indices, val_indices = train_test_split(np.arange(len(train_dataset)), test_size=0.2, random_state=42)
-    # train_sampler = SubsetRandomSampler(train_indices)
-    # val_sampler = SubsetRandomSampler(val_indices)
 
-    train_sampler = SubsetRandomSampler(np.arange(len(train_dataset)))
-    val_sampler = SubsetRandomSampler(np.arange(len(val_dataset)))
 
+    # train_sampler = DistributedSampler(train_dataset,num_replicas=args.world_size, rank=rank)
+    # val_sampler = DistributedSampler(val_dataset, num_replicas=args.world_size, rank=rank)
     # train_size = len(train_dataset)*2
     # val_size = len(val_dataset)*2
     train_size = len(train_sampler) * 2
@@ -142,19 +169,20 @@ def train_net(model, denoiser, args):
         num_workers=4,
         sampler=train_sampler
     )
-
-    # val_loader = DataLoader(
-    #     val_dataset,
-    #     batch_size=args.batch_size,
-    #     num_workers=4,
-    #     sampler=val_sampler
-    # )
-    val_loader = DataLoader(
-        train_dataset,
-        batch_size=args.batch_size,
-        num_workers=4,
-        sampler=val_sampler
-    )
+    if 'fundus' in args.data_path:
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=args.batch_size,
+            num_workers=4,
+            sampler=val_sampler
+        )
+    else:
+        val_loader = DataLoader(
+            train_dataset,
+            batch_size=args.batch_size,
+            num_workers=4,
+            sampler=val_sampler
+        )
     start_epoch = args.start_epoch
     save_dir = args.save_dir
     if args.resume:
@@ -183,16 +211,10 @@ def train_net(model, denoiser, args):
     #     denoiser_path = os.path.join(denoiser_folder, 'SegNet.pth')
     #
     # elif args.model == 'DenseNet':
-    denoiser_path = os.path.join(denoiser_folder,args.model+ '_ifgsm.pth')
+    denoiser_path = os.path.join(denoiser_folder,'{}_{}.pth'.format(args.model, args.suffix))
     # denoiser_path = os.path.join(denoiser_folder, args.model + '_pgd.pth')
     print('save path', denoiser_path)
     # set optimizer
-
-    if isinstance(model, DataParallel):
-        params = denoiser.module.parameters()
-    else:
-        params = denoiser.parameters()
-    optimizer = torch.optim.Adam(params)
 
 
     # main train
@@ -212,15 +234,16 @@ def train_net(model, denoiser, args):
     patience = 7
     counter = 0
     model.eval()
-    if isinstance(model, DataParallel):
-        denoiser.module.train()
-    else:
-        denoiser.train()
+    # if isinstance(denoiser, DataParallel):
+    #     denoiser.module.train()
+    # else:
+    #     denoiser.train()
     for epoch in range(start_epoch,num_epochs+start_epoch):
         # model.eval()
         print('Starting epoch {}/{}'.format(epoch+1, num_epochs))
         # train
         # model.train()
+        denoiser.train()
 
         metrics = defaultdict(float)
         denoised_metrics = defaultdict(float)
@@ -235,18 +258,22 @@ def train_net(model, denoiser, args):
             adv_images = adv_images.to(device).float()
             masks = masks.to(device).long()
 
+            # images = images.cuda(non_blocking=True).float()
+            # adv_images = adv_images.cuda(non_blocking=True).float()
+            # masks = masks.cuda(non_blocking=True).long()
+
             optimizer.zero_grad()
 
             # outputs, adv_outputs, l = model(device, images,adv_images)
             
             clean_outputs = model(images)
             clean_outputs_ = F.softmax(clean_outputs, dim=1)
-
+            # clean_outputs_ = clean_outputrain_denoiser.pytrain_denoiser.pyts_.cuda(gpu)
+            # clean_outputs = clean_outputs.to(device)
             denoised_images = denoiser(adv_images)
-
             denoised_output = model(denoised_images)
             denoised_output_ = F.softmax(denoised_output, dim=1)
-            
+            # denoised_output_ = denoised_output_.cuda(gpu)
             l = denoiser.loss(clean_outputs_,denoised_output_)
             # ssim_loss = ssim_module(images,denoised_images)
             # ssim_loss = ms_ssim(images, denoised_images, data_range=1, size_average=False)
@@ -263,8 +290,8 @@ def train_net(model, denoiser, args):
                 ll = l_mean.data.cpu().numpy()
                 l1_loss.append(ll)
             # print('mask', masks.squeeze(1).size(), outputs.size())
-            cb_loss, cross, dice = combined_loss(clean_outputs, masks.squeeze(1), device, n_classes)
-            adv_cb_loss, adv_cross, adv_dice = combined_loss(denoised_output, masks.squeeze(1), device, n_classes)
+            cb_loss, cross, dice = combined_loss(clean_outputs, masks, device, n_classes)
+            adv_cb_loss, adv_cross, adv_dice = combined_loss(denoised_output, masks, device, n_classes)
             # print('clean', dice.mean())
             # print('adv', adv_dice.mean())
             # adv_outputs_ = F.softmax(adv_outputs, dim=1)
@@ -326,10 +353,14 @@ def train_net(model, denoiser, args):
             
             clean_outputs = model(images)
             clean_outputs_ = F.softmax(clean_outputs, dim=1)
+            # clean_outputs = clean_outputs.to(device)
+            # clean_outputs_ = clean_outputs_.cuda(gpu)
+
             denoised_images = denoiser(adv_images)
-            
+
             denoised_output = model(denoised_images)
             denoised_output_ = F.softmax(denoised_output, dim=1)
+            # denoised_output_ = denoised_output_.cuda(gpu)
             l = denoiser.loss(clean_outputs_, denoised_output_)
 
             # ssim_loss = ssim_module(images, denoised_images)
@@ -395,7 +426,7 @@ def train_net(model, denoiser, args):
             model_copy = copy.deepcopy(denoiser)
             model_copy = model_copy.cpu()
 
-            model_state_dict = model_copy.module.state_dict() if len(device_ids) > 1 else model_copy.state_dict()
+            model_state_dict = model_copy.module.state_dict() if isinstance(denoiser, DataParallel) else model_copy.state_dict()
             torch.save(model_state_dict, denoiser_path)
 
             del model_copy
@@ -448,10 +479,14 @@ if __name__ == "__main__":
     denoiser_path = os.path.join(args.save_dir, args.data_path, args.model+'.pth')
     denoiser= get_net(args.height, args.width, n_classes, args.channels, args.resume)
     summary(model, input_size=(n_channels, args.height, args.width), device = 'cpu')
-        
+    summary(denoiser, input_size=(n_channels, args.height, args.width), device='cpu')
+    # os.environ['MASTER_ADDR'] = '10.2.142.212'
+    # os.environ['MASTER_PORT'] = '8888'
+    # args.world_size = args.gpus * args.nodes
+    # mp.spawn(train_net, nprocs=args.gpus, args=(model, denoiser, args,))
     loss_history = train_net(model, denoiser, args)
     
-    # save validation loss history
-    with open('./checkpoints/denoiser/{}/validation_losses_{}'.format(args.data_path,args.model), 'w') as fp:
-        # pickle.dump(loss_history, fp)
-        fp.writelines('loss val: total {} l1 {} dice {} ; train: total {} l1 {} dice {}\n'.format(x[0],x[1],x[2],x[3],x[4],x[5]) for x in loss_history)
+    # # save validation loss history
+    # with open('./checkpoints/denoiser/{}/validation_losses_{}'.format(args.data_path,args.model), 'w') as fp:
+    #     # pickle.dump(loss_history, fp)
+    #     fp.writelines('loss val: total {} l1 {} dice {} ; train: total {} l1 {} dice {}\n'.format(x[0],x[1],x[2],x[3],x[4],x[5]) for x in loss_history)

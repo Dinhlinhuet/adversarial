@@ -11,7 +11,6 @@ from torch.autograd import Variable
 from model.svd import svd_rgb
 # from pytorch_msssim import SSIM,ssim
 # ssim_module = SSIM(data_range=255, size_average=True, channel=3)
-
 def get_net(height,width,num_class, channels, model_path):
     # input_size = [299, 299]
     input_size = [256,256]
@@ -90,8 +89,8 @@ class Loss(nn.Module):
 # DUNET
 class Denoise(nn.Module):
     def __init__(self, h_in, w_in, block, fwd_in, fwd_out, num_fwd, back_out, num_back):
-        super(Denoise, self).__init__()
-
+        # super(Denoise, self).__init__()
+        super().__init__()
         h, w = [], []
         for i in range(len(num_fwd)):
             h.append(h_in)
@@ -164,6 +163,7 @@ class Denoise(nn.Module):
             out = self.upsample[i](out)
             out = torch.cat((out, outputs[i]), 1)
             out = self.back[i](out)
+        # print('in1', out.size())
         out = self.final(out)
         # print('input', torch.min(x), torch.max(x))
         out += x
@@ -240,6 +240,46 @@ class Bottleneck(nn.Module):
         out = self.relu(out)
 
         return out
+
+
+class Self_Attn(nn.Module):
+    """ Self attention Layer"""
+
+    def __init__(self, in_dim, activation):
+        super(Self_Attn, self).__init__()
+        self.chanel_in = in_dim
+        self.activation = activation
+
+        self.query_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim // 8, kernel_size=1)
+        self.key_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim // 8, kernel_size=1)
+        self.value_conv = nn.Conv2d(in_channels=in_dim, out_channels=in_dim, kernel_size=1)
+        self.gamma = nn.Parameter(torch.zeros(1))
+
+        self.softmax = nn.Softmax(dim=-1).to(device2)  #
+
+    def forward(self, x):
+        """
+            inputs :
+                x : input feature maps( B X C X W X H)
+            returns :
+                out : self attention value + input feature
+                attention: B X N X N (N is Width*Height)
+        """
+        m_batchsize, C, width, height = x.size()
+        proj_query = self.query_conv(x).view(m_batchsize, -1, width * height).permute(0, 2, 1)  # B X CX(N)
+        proj_key = self.key_conv(x).view(m_batchsize, -1, width * height)  # B X C x (*W*H)
+        print('proj', proj_query.size(), proj_key.size(), proj_query.dtype, proj_key.dtype)
+        proj_key = proj_key.cpu()
+        energy = torch.bmm(proj_query, proj_key)  # transpose check
+        print('enery', energy.size())
+        attention = self.softmax(energy)  # BX (N) X (N)
+        proj_value = self.value_conv(x).view(m_batchsize, -1, width * height)  # B X C X N
+        # print('proj', proj_value.size(), attention.size())
+        out = torch.bmm(proj_value, attention.permute(0, 2, 1))
+        out = out.view(m_batchsize, C, width, height)
+
+        out = self.gamma * out + x
+        return out, attention
 
 class Net(nn.Module):
     def __init__(self, input_size, channels, num_class, block, fwd_out, num_fwd, back_out, num_back, n, hard_mining=0, loss_norm=False):
