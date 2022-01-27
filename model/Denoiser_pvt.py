@@ -22,7 +22,7 @@ import torch.nn.init as init
 def get_net(input_size, channels, model_path):
     # input_size = [299, 299]
     input_size = input_size
-    denoiser = Denoise(input_size)
+    denoiser = Denoise(input_size, in_chans=channels, out_chans=channels)
 
     # if os.path.exists(model_path):
     if model_path:

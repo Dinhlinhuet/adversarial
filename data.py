@@ -132,7 +132,10 @@ class DefenseSclDataset(Dataset):
         self.data_path = data_path
         npz_file = './data/{}/{}_{}.npz'.format(data_path,data_path, phase)
 
-        adv_npz_file = './data/{}/denoiser/scl_attk_{}_{}.npz'.format(data_path, data_path, phase)
+        adv_data_dir = './data/{}/denoiser/'.format(data_path)
+        if not os.path.exists(adv_data_dir):
+            os.makedirs(adv_data_dir)
+        adv_npz_file = '{}/scl_attk_{}_{}.npz'.format(adv_data_dir, data_path, phase)
         adv_dir = './output/scale_attk/{}/{}/'.format(data_path, phase)
         self.adv_images = []
         if not os.path.exists(adv_npz_file):

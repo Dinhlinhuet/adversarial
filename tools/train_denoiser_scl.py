@@ -102,7 +102,7 @@ def train_net(model, denoiser, args):
     # denoiser = nn.parallel.DistributedDataParallel(denoiser, device_ids=[gpu])
     # pytorch_total_params = sum(p.numel() for p in c_params)
     # print('total denoiser params', pytorch_total_params)
-    optimizer = torch.optim.Adam(params, lr=1e-3, weight_decay=0.1)
+    optimizer = torch.optim.Adam(params, lr=1e-4, weight_decay=0.1)
     model = model.to(device)
     # model.cuda(gpu)
     denoiser = denoiser.to(device)
@@ -227,7 +227,8 @@ def train_net(model, denoiser, args):
             images = images.to(device).float()
             adv_images = adv_images.to(device).float()
             masks = masks.to(device).long()
-            # print('adv', adv_images.size(), images.max(), adv_images.max(),)
+            # print('adv', adv_images.size(), images.max(), adv_images.max())
+            # print('img', images.shape)
             # images = images.cuda(non_blocking=True).float()
             # adv_images = adv_images.cuda(non_blocking=True).float()
             # masks = masks.cuda(non_blocking=True).long()
@@ -256,8 +257,8 @@ def train_net(model, denoiser, args):
             denoised_cln_output_ = F.softmax(denoised_cln_output, dim=1)
             # denoised_cln_output_ = denoised_cln_output_.to(device)
 
-            loss = criterian(clean_outputs_,denoised_cln_output_)+ criterian(clean_outputs_, denoised_adv_output_)#-\
-            # criterian(clean_outputs_, adv_outputs_)
+            loss = criterian(clean_outputs_,denoised_cln_output_)+ criterian(clean_outputs_, denoised_adv_output_) -\
+            criterian(clean_outputs_, adv_outputs_)
             # loss = criterian(clean_outputs_, denoised_adv_output_)
             loss.backward()
             optimizer.step()
@@ -327,8 +328,8 @@ def train_net(model, denoiser, args):
             # denoised_output_ = denoised_output_.cuda(gpu)
             # denoised_cln_output_ = denoised_cln_output_.to(device)
 
-            loss = criterian(clean_outputs_, denoised_cln_output_) + criterian(clean_outputs_, denoised_adv_output_) #- \
-                   # criterian(clean_outputs_, adv_outputs_)
+            loss = criterian(clean_outputs_, denoised_cln_output_) + criterian(clean_outputs_, denoised_adv_output_) - \
+                   criterian(clean_outputs_, adv_outputs_)
 
             dice = dice_loss1(clean_outputs, masks.squeeze(1), device, n_classes)
             cln_dice = dice_loss1(denoised_cln_output, masks.squeeze(1), device, n_classes)

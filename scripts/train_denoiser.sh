@@ -19,8 +19,17 @@
 #python train_denoiser.py \
 #        --data_path octa3mfull --model DenseNet --classes 3 --channels 1  --batch_size 1 --suffix rd  --gpus 1
 
-python tools/train_denoiser_scl.py \
-        --data_path fundus --model UNet --classes 3 --channels 3  --batch_size 4 --suffix pvt_scl  --device 0
+#python tools/train_denoiser_scl.py \
+#        --data_path fundus --model UNet --classes 3 --channels 3  --batch_size 4 --suffix pvt_scl  --device 0
 
 #python tools/train_denoiser_scl.py \
 #        --data_path fundus --model UNet --classes 3 --channels 3  --batch_size 4 --suffix pvt  --device 1
+
+#python tools/train_denoiser_scl.py \
+#        --data_path brain --model UNet --classes 2 --channels 3  --batch_size 4 --suffix pvt_scl  --device 0
+
+#python tools/train_denoiser_scl.py \
+#        --data_path octafull --model UNet --classes 3 --channels 1  --batch_size 4 --suffix pvt_scl  --device 1
+
+python tools/train_denoiser_scl.py \
+        --data_path octafull --model UNet --classes 3 --channels 1  --batch_size 4 --suffix pvt_scl_lre4  --device 0

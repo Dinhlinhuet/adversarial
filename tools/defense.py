@@ -214,7 +214,6 @@ if __name__ == "__main__":
     n_classes = args.classes
     
     # model = None
-    
     if args.model == 'UNet':
         model = UNet(in_channels = n_channels, n_classes = n_classes)
 
