@@ -21,6 +21,7 @@ from PIL import Image
 
 from model import deeplab
 from dataset.dataset import SampleDataset, SegmentDataset
+from dataset.scale_att_dataset import AttackDataset
 from util import save_metrics, print_metrics, make_one_hot
 from loss import combined_loss, dice_score
 import utils
@@ -104,12 +105,14 @@ def test():
     n_channels = args.channels
     #for fundus and brain
     if 'octa' in data_path:
-        test_dataset = SampleDataset(data_path, n_classes, n_channels, mode= 'test',
-            data_type='org',width=args.width,height=args.height)
+        # test_dataset = SampleDataset(data_path, n_classes, n_channels, mode= 'test',
+        #     data_type='org',width=args.width,height=args.height)
+        test_dataset = AttackDataset(args.data_path, args.channels, 'test', args.data_path)
         test_sampler = SubsetRandomSampler(np.arange(len(test_dataset)))
     else:
-        test_dataset = SegmentDataset(data_path, n_classes, n_channels, mode= 'test', gen_mode=None,model=None,
-            type=None,target_class=None,data_type='org',width=args.width,height=args.height, mask_type=None, suffix=None)
+        # test_dataset = SegmentDataset(data_path, n_classes, n_channels, mode= 'test', gen_mode=None,model=None,
+        #     type=None,target_class=None,data_type='org',width=args.width,height=args.height, mask_type=None, suffix=None)
+        test_dataset = AttackDataset(args.data_path, args.channels, 'test', args.data_path)
         test_sampler = SubsetRandomSampler(np.arange(len(test_dataset)))
     print('total test image : {}'.format(len(test_sampler)))
 
@@ -124,7 +127,7 @@ def test():
     print('num class', args.classes, 'out stride', args.output_stride)
     # Set up model (all models are 'constructed at deeplab.modeling)
     model = deeplab.modeling.__dict__[args.model](num_classes=args.classes, output_stride=args.output_stride,
-                                                  pretrained_backbone=False)
+                                                  in_channels=args.channels, pretrained_backbone=False)
     if args.separable_conv and 'plus' in args.model:
         deeplab.convert_to_separable_conv(model.classifier)
     # utils.set_bn_momentum(model.backbone, momentum=0.01)

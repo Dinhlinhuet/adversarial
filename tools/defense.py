@@ -13,14 +13,20 @@ from matplotlib import pyplot as plt
 from matplotlib import cm
 from PIL import Image
 from optparse import OptionParser
-
+from os import path
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+print(path.dirname(path.dirname(path.abspath(__file__))))
 from util import make_one_hot
-from dataset.dataset import SampleDataset
+# from dataset.dataset import SampleDataset
+from dataset.scale_att_dataset import AttackDataset
+from data import DefenseDataset, DefenseSclTestDataset
 from model import UNet, SegNet, DenseNet
 from loss import dice_score
+from model import deeplab
 # from model.Denoiser import get_net
-from model.Denoiser_new import get_net
-from model.svd import svd_rgb, svd_gs
+from model.Denoiser_pvt import get_net
+# from model.Denoiser_new import get_net
+from util import AverageMeter
 import cv2
 from model.AgNet.core.utils import get_model, dice_loss
 from opts import get_args
@@ -83,53 +89,34 @@ from opts import get_args
 def test(model, denoiser, args):
     
     data_path = args.data_path
-    gpu = args.gpus
     n_classes = args.classes
     suffix = args.suffix
     # args.output_path = '{}/{}/{}/{}/{}/'.format(args.output_path,args.data_path,args.model,args.adv_model, args.attacks)
     # args.output_path = os.path.join(args.output_path, args.data_path,'512', args.model, args.adv_model,
     #                                 args.data_type, args.attacks)
-    args.output_path = os.path.join(args.output_path, args.data_path, args.model, args.adv_model,
-                                    args.data_type, args.attacks, 'm'+ args.mask_type+'t'+args.target, suffix)
-    args.denoise_output = os.path.join(args.denoise_output, args.data_path, args.model, args.adv_model,
-                                    args.data_type, args.attacks, 'm'+ args.mask_type+'t'+args.target, suffix)
+    # args.output_path = os.path.join(args.output_path, args.data_path, args.model, args.adv_model,
+    #                                 args.data_type, args.attacks, 'm'+ args.mask_type+'t'+args.target, suffix)
+    # args.denoise_output = os.path.join(args.denoise_output, args.data_path, args.model, args.adv_model,
+    #                                 args.data_type, args.attacks, 'm'+ args.mask_type+'t'+args.target, suffix)
+    args.output_path = '{}/{}/{}/{}/'.format(args.output_path,args.data_path,args.model,args.attacks)
+    args.denoise_output = os.path.join(args.denoise_output, args.data_path, args.model,
+                                    args.data_type, args.attacks, suffix)
     print('output path', args.output_path)
-    # set device configuration
-    device_ids = []
-    
-    if gpu > 0 :
-        
-        if not torch.cuda.is_available() :
-            print("No cuda available")
-            raise SystemExit
-            
-        device = torch.device(args.device)
-        
-        device_ids.append(args.device1)
-        
-        if args.device2 != -1 :
-            device_ids.append(args.device2)
-            
-        if args.device3 != -1 :
-            device_ids.append(args.device3)
-        
-        if args.device4 != -1 :
-            device_ids.append(args.device4)
-        
-    
-    else :
-        device = torch.device("cpu")
-    
-    if len(device_ids) > 1:
-        model = nn.DataParallel(model, device_ids = device_ids)
+    print('denoised image path', args.denoise_output)
+    device = torch.device(args.device)
         
     model = model.to(device)
     denoiser = denoiser.to(device)
     
     # set testdataset
         
-    test_dataset = SampleDataset(data_path,args.classes, args.channels, args.mode, None, args.adv_model, args.attacks,
-                                 args.target, args.data_type, args.width, args.height, args.mask_type, suffix)
+    # test_dataset = SampleDataset(data_path,args.classes, args.channels, args.mode, None, args.adv_model, args.attacks,
+    #                              args.target, args.data_type, args.width, args.height, args.mask_type, suffix)
+    if args.attacks=='scl_attk':
+        test_dataset = DefenseSclTestDataset(data_path, 'test', args.channels)
+    else:
+        test_dataset = AttackDataset(args.data_path, args.channels, args.mode, args.data_path)
+
     
     test_loader = DataLoader(
         test_dataset,
@@ -138,8 +125,8 @@ def test(model, denoiser, args):
     )
     
     print('test_dataset : {}, test_loader : {}'.format(len(test_dataset), len(test_loader)))
-    
-    avg_score = 0.0
+
+    score = AverageMeter()
     
     # test
     
@@ -159,8 +146,10 @@ def test(model, denoiser, args):
         
             inputs = inputs.to(device).float()
             labels = labels.to(device).long()
-            
-            target = make_one_hot(labels[:,0,:,:], n_classes, device)
+            if args.attacks == 'scl_attk':
+                target = make_one_hot(labels, n_classes, device)
+            else:
+                target = make_one_hot(labels[:, 0, :, :], n_classes, device)
             denoised_img = denoiser(inputs)
             # print('max', torch.max(denoised_img))
             # for i, denoised_im in enumerate(denoised_img):
@@ -184,7 +173,8 @@ def test(model, denoiser, args):
                 pred = model(denoised_img)
                 loss, masks = dice_score(pred,target)
             
-            avg_score += loss.data.cpu().numpy()
+            bsz = target.shape[0]
+            score.update(loss.item(), bsz)
             # print('af',len(pred.data.cpu().numpy()))
             masks=onehot2norm(np.asarray(masks.data.cpu()))
             # AG
@@ -206,7 +196,7 @@ def test(model, denoiser, args):
                 cv2.imwrite(os.path.join(args.denoise_output,'{}.png'.format(batch_idx*args.batch_size+i)), denoised_im*255)
             del inputs, labels, target,  loss
             
-    avg_score /= len(test_loader)
+    avg_score = score.avg
     if args.model == 'AG_Net':
         avg_score = 1-avg_score
     
@@ -233,29 +223,32 @@ if __name__ == "__main__":
 
     elif args.model == 'DenseNet':
         model = DenseNet(in_channels = n_channels, n_classes = n_classes)
-    else:
+    elif args.model == 'AgNet':
         models_list = ['AG_Net']
         model_name = models_list[0]
         model = get_model(model_name)
         model = model(n_classes=n_classes, bn=args.GroupNorm, BatchNorm=args.BatchNorm)
         model = model.double()
-    # else :
-    #     print("wrong model : must be UNet, SegNet, or DenseNet")
-    #     raise SystemExit
+    else:
+        model = deeplab.modeling.__dict__[args.model](num_classes=args.classes, output_stride=args.output_stride,
+                                                      in_channels=args.channels, pretrained_backbone=False)
+        if args.separable_conv and 'plus' in args.model:
+            deeplab.convert_to_separable_conv(model.classifier)
         
     model_path = os.path.join(args.model_path, args.data_path, args.model + '.pth')
     # prefix = 'pgd'
     # prefix = 'ifgsm'
     # prefix = 'rd'
-    prefix = 'trf_rd'
+    # prefix = 'trf_rd'
     # guide_mode = 'SegNet'
+    prefix = 'pvt_scl'
     guide_mode = 'UNet'
     # guide_mode = 'DenseNet'
     denoiser_path = os.path.join(args.denoiser_path, args.data_path, '{}_{}.pth'.format(guide_mode,prefix))
-    # denoiser_path = os.path.join(args.denoiser_path, args.data_path, 'UNet.pth')
+    # denoiser_path = os.path.join(args.denoiser_path, args.data_path, '{}.pth'.format(guide_mode))
     print('denoiser ', denoiser_path)
-    denoiser = get_net(args.height, args.width, args.classes, args.channels, denoiser_path, args.batch_size)
-
+    # denoiser = get_net(args.height, args.width, args.classes, args.channels, denoiser_path, args.batch_size)
+    denoiser = get_net(args.height, args.channels, denoiser_path)
     # model_path = os.path.join(args.model_path, 'fundus', args.model + '.pth')
     print('target model', model_path)
     model.load_state_dict(torch.load(model_path))

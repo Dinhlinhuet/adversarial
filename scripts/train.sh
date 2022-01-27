@@ -14,8 +14,8 @@
 #python tools/train_deeplab.py --model deeplabv3plus_hrnetv2_48  --data_path fundus --device 0 --lr 0.01 --batch_size 16\
 # --output_stride 8 --classes 3 --channels 3
 
-python tools/train_deeplab.py --model deeplabv3plus_resnet101  --data_path fundus --device 0 --lr 0.01 --batch_size 16\
- --output_stride 8 --classes 3 --channels 3
+#python tools/train_deeplab.py --model deeplabv3plus_resnet101  --data_path fundus --device 0 --lr 0.01 --batch_size 16\
+# --output_stride 8 --classes 3 --channels 3
 
 #python tools/train_deeplab.py --model deeplabv3_mobilenet_v3_large  --data_path fundus --device 0 --lr 0.01 --batch_size 16\
 # --output_stride 8 --classes 3 --channels 3
@@ -24,3 +24,6 @@ python tools/train_deeplab.py --model deeplabv3plus_resnet101  --data_path fundu
 
 #python tools/train_deeplab.py --model deeplabv3plus_mobilenet  --data_path brain --device 0 --lr 0.01 --batch_size 8\
 # --output_stride 8 --classes 2 --channels 3
+
+python tools/train_deeplab.py --model deeplabv3plus_resnet101  --data_path octafull --device 0 --lr 0.01 --batch_size 16\
+ --output_stride 8 --classes 3 --channels 1

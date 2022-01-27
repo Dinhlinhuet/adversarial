@@ -7,6 +7,7 @@ from torchvision import transforms
 import cv2
 import time
 import random as rd
+import re
 
 
 class DefenseDataset(Dataset):
@@ -122,6 +123,67 @@ class DefenseDataset(Dataset):
     def __len__(self):
         return len(self.images)
 
+class DefenseSclDataset(Dataset):
+    def __init__(self, data_path, phase, channels):
+        assert phase == 'train' or phase == 'val' or phase == 'test'
+        self.phase = phase
+        # self.dataset = dataset
+        # self.attack = attack
+        self.data_path = data_path
+        npz_file = './data/{}/{}_{}.npz'.format(data_path,data_path, phase)
+
+        adv_npz_file = './data/{}/denoiser/scl_attk_{}_{}.npz'.format(data_path, data_path, phase)
+        adv_dir = './output/scale_attk/{}/{}/'.format(data_path, phase)
+        self.adv_images = []
+        if not os.path.exists(adv_npz_file):
+            print('not found', adv_npz_file)
+            def filename(x):
+                return int(re.sub('[^0-9]','', x.split('.')[0]))
+
+            ls_names = sorted(os.listdir(adv_dir), key=filename)
+            # print('lsname', ls_names)
+            for img_name in ls_names:
+                # print('img', img_name)
+                img_path = os.path.join(adv_dir, img_name)
+                # print('label', label_path)
+                if channels == 1:
+                    img = cv2.imread(img_path, 0)
+                else:
+                    img = cv2.imread(img_path)
+                # img = cv2.resize(img,(256,256))/ 255
+                img = img / 255
+                self.adv_images.append(img)
+            np.savez_compressed(adv_npz_file, a=self.adv_images)
+        else:
+            print('load adv', adv_npz_file)
+            adv_data = np.load(adv_npz_file)
+            self.adv_images = adv_data['a']
+        print('load clean', npz_file)
+        data = np.load(npz_file)
+        self.images = data['a']
+        self.labels = data['b']
+        print('len advset', len(self.adv_images))
+
+
+    def __getitem__(self, index):
+        # print("idx", index)
+        image = self.images[index]
+        labels = self.labels[index]
+        adv_image = self.adv_images[index]
+        torch_transform = transforms.Compose([
+            transforms.ToTensor()
+        ])
+
+        image = torch_transform(image)
+        # labels = torch.from_numpy(labels).unsqueeze(0)
+        # print('label', labels.size())
+        # labels = torch_transform(labels)
+        adv_image = torch_transform(adv_image)
+
+        return image, adv_image, labels
+
+    def __len__(self):
+        return len(self.images)
 
 def augment(imgs, config, train):
     if train:
@@ -162,3 +224,60 @@ def normalize(imgs, net_type):
             imgs[i] /= std
 
     return imgs
+
+class DefenseSclTestDataset(Dataset):
+    def __init__(self, data_path, phase, channels):
+        assert phase == 'train' or phase == 'val' or phase == 'test'
+        self.phase = phase
+        # self.dataset = dataset
+        # self.attack = attack
+        self.data_path = data_path
+        npz_file = './data/{}/{}_{}.npz'.format(data_path,data_path, phase)
+
+        # adv_npz_file = './data/{}/denoiser/scl_attk_{}_{}.npz'.format(data_path, data_path, phase)
+        adv_npz_file = './data/{}/scl_attk_{}_{}.npz'.format(data_path, data_path, phase)
+        adv_dir = './output/scale_attk/{}/{}/'.format(data_path, phase)
+        self.adv_images = []
+        if not os.path.exists(adv_npz_file):
+            print('not found', adv_npz_file)
+            def filename(x):
+                return int(re.sub('[^0-9]','', x.split('.')[0]))
+
+            ls_names = sorted(os.listdir(adv_dir), key=filename)
+            # print('lsname', ls_names)
+            for img_name in ls_names:
+                # print('img', img_name)
+                img_path = os.path.join(adv_dir, img_name)
+                # print('label', label_path)
+                if channels == 1:
+                    img = cv2.imread(img_path, 0)
+                else:
+                    img = cv2.imread(img_path)
+                # img = cv2.resize(img,(256,256))/ 255
+                img = img / 255
+                self.adv_images.append(img)
+            np.savez_compressed(adv_npz_file, a=self.adv_images)
+        else:
+            print('load adv', adv_npz_file)
+            adv_data = np.load(adv_npz_file)
+            self.adv_images = adv_data['a']
+        print('load clean', npz_file)
+        data = np.load(npz_file)
+        self.labels = data['b']
+        print('len advset', len(self.adv_images))
+
+
+    def __getitem__(self, index):
+        # print("idx", index)
+        labels = self.labels[index]
+        adv_image = self.adv_images[index]
+        torch_transform = transforms.Compose([
+            transforms.ToTensor()
+        ])
+
+        adv_image = torch_transform(adv_image)
+
+        return adv_image, labels
+
+    def __len__(self):
+        return len(self.labels)

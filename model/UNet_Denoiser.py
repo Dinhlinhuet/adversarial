@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from model.svd import svd_rgb
-
 
 class double_conv(nn.Module):
     '''(conv => BN => ReLU) * 2'''
@@ -84,7 +82,6 @@ class UNet(nn.Module):
     def forward(self, x, defense=False):
         # print('input', x.size())
         # print('x', torch.min(x), torch.max(x))
-        # x = svd_rgb(x,150,150,150)
         output = []
         if defense:
             x = self.denoise(x)

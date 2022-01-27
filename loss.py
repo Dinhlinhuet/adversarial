@@ -102,3 +102,25 @@ def combined_loss(pred, target, device, n_classes):
     del weights
     
     return loss, cross, dice
+
+
+def dice_loss1(pred, target,device, n_classes,):
+    """
+    :param pred : N x C x H x W logits
+    :param encoded_target : N x C x H x W LongTensor
+    """
+    encoded_target = make_one_hot(target, n_classes, device)
+    output = F.softmax(pred, dim=1)
+    eps = 1
+    # print('out', output.size())
+    intersection = output * encoded_target
+    numerator = 2 * intersection.sum(0).sum(1).sum(1) + eps
+    denominator = output + encoded_target
+    denominator = denominator.sum(0).sum(1).sum(1) + eps
+
+    loss_per_channel = 1 - (numerator / denominator)
+
+    loss = loss_per_channel.sum() / output.size(1)
+    del output, encoded_target
+
+    return loss.mean()

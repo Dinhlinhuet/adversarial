@@ -13,6 +13,9 @@ from matplotlib import pyplot as plt
 from matplotlib import cm
 from PIL import Image
 from optparse import OptionParser
+from os import path
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+print(path.dirname(path.dirname(path.abspath(__file__))))
 
 from util import make_one_hot
 from dataset import SampleDataset

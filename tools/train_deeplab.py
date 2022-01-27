@@ -186,7 +186,11 @@ def main():
     # )
     print('num class', args.classes, 'out stride', args.output_stride)
     # Set up model (all models are 'constructed at deeplab.modeling)
-    model = deeplab.modeling.__dict__[args.model](num_classes=args.classes, output_stride=args.output_stride)
+    model = deeplab.modeling.__dict__[args.model](num_classes=args.classes, in_channels=args.channels,
+                                                  output_stride=args.output_stride, pretrained_backbone=False)
+    # model.backbone.in_channels = 1
+    # model.backbone.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3,
+    #                            bias=False)
     if args.separable_conv and 'plus' in args.model:
         deeplab.convert_to_separable_conv(model.classifier)
     # model = torch.hub.load('pytorch/vision:v0.10.0', 'deeplabv3_mobilenet_v3_large', pretrained=True)
