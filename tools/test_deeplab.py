@@ -105,7 +105,7 @@ def test():
     n_channels = args.channels
     #for fundus and brain
     if 'octa' in data_path:
-        # test_dataset = SampleDataset(data_path, n_classes, n_channels, mode= 'test',
+        # test_dataset = SampleDataset(data_path, n_classes, n_channels, mode= 'train',
         #     data_type='org',width=args.width,height=args.height)
         test_dataset = AttackDataset(args.data_path, args.channels, 'test', args.data_path)
         test_sampler = SubsetRandomSampler(np.arange(len(test_dataset)))

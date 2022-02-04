@@ -71,11 +71,11 @@ class Attention(nn.Module):
         self.linear = linear
         self.sr_ratio = sr_ratio
         if not linear:
-            if sr_ratio < 8:
+            # if sr_ratio < 8:
                 # print('sr', sr_ratio)
                 # self.sr = nn.ConvTranspose2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
-                self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
-                self.norm = nn.LayerNorm(dim)
+            self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
+            self.norm = nn.LayerNorm(dim)
         else:
             self.pool = nn.AdaptiveAvgPool2d(7)
             self.sr = nn.ConvTranspose2d(dim, dim, kernel_size=1, stride=1)
@@ -104,18 +104,18 @@ class Attention(nn.Module):
         q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
 
         if not self.linear:
-            if self.sr_ratio < 8:
-                x_ = x.permute(0, 2, 1).reshape(B, C, H, W)
-                # print('middl', x_.shape)
-                x_ = self.sr(x_)
-                # print('conv', x_.shape)
-                x_ = x_.reshape(B, C, -1).permute(0, 2, 1)
-                # x_ = self.sr(x_).reshape(B, C, -1).permute(0, 2, 1)
-                x_ = self.norm(x_)
-                # print('x_', x_.shape)
-                kv = self.kv(x_).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-            else:
-                kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+            # if self.sr_ratio < 8:
+            x_ = x.permute(0, 2, 1).reshape(B, C, H, W)
+            # print('middl', x_.shape)
+            x_ = self.sr(x_)
+            # print('conv', x_.shape)
+            x_ = x_.reshape(B, C, -1).permute(0, 2, 1)
+            # x_ = self.sr(x_).reshape(B, C, -1).permute(0, 2, 1)
+            x_ = self.norm(x_)
+            # print('x_', x_.shape)
+            kv = self.kv(x_).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+            # else:
+            #     kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         else:
             x_ = x.permute(0, 2, 1).reshape(B, C, H, W)
             x_ = self.sr(self.pool(x_)).reshape(B, C, -1).permute(0, 2, 1)
@@ -138,7 +138,7 @@ class Attention(nn.Module):
 
 class Block(nn.Module):
 
-    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
+    def __init__(self, dim, num_heads, mlp_ratio=4., out_feature=None, qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, sr_ratio=1, linear=False):
         super().__init__()
         self.norm1 = norm_layer(dim)
@@ -151,7 +151,8 @@ class Block(nn.Module):
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
         # print('mlp', dim, mlp_hidden_dim)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop, linear=linear)
+        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, out_features=out_feature,
+                       act_layer=act_layer, drop=drop, linear=linear)
 
         self.apply(self._init_weights)
 
@@ -171,9 +172,11 @@ class Block(nn.Module):
                 m.bias.data.zero_()
 
     def forward(self, x, H, W):
+        # print('ini', self.attn(self.norm1(x), H, W).shape)
         x = x + self.drop_path(self.attn(self.norm1(x), H, W))
+        # print('att', x.shape, self.mlp(self.norm2(x), H, W).shape)
         x = x + self.drop_path(self.mlp(self.norm2(x), H, W))
-
+        # print('mlp', x.shape)
         return x
 
 
@@ -226,14 +229,15 @@ class OverlapPatchEmbed(nn.Module):
 
 
 class PyramidVisionTransformerDecoder(nn.Module):
-    def __init__(self, img_size=224, patch_size=16, out_chans=3, num_classes=1000, embed_dims=[512, 320, 128, 64],
+    def __init__(self, img_size=224, out_chans=3, num_classes=1000, embed_dims=[512, 320, 128, 64], out_dims=None,
                  num_heads=[8, 4, 2, 1], mlp_ratios=[4, 4, 4, 4], qkv_bias=False, qk_scale=None, drop_rate=0.,
                  attn_drop_rate=0., drop_path_rate=0., norm_layer=nn.LayerNorm,
-                 depths=[3, 4, 6, 3], sr_ratios=[1, 2, 4, 8], num_stages=4, linear=False):
+                 depths=[3, 4, 6, 3], sr_ratios=[1, 2, 4, 8], num_stages=4, linear=False, num_mid=3):
         super().__init__()
         self.num_classes = num_classes
         self.depths = depths
         self.num_stages = num_stages
+        self.num_mid= num_mid
 
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]  # stochastic depth decay rule
         # print('dpr', dpr)
@@ -252,7 +256,7 @@ class PyramidVisionTransformerDecoder(nn.Module):
                                             patch_size=7 if i == num_stages-1 else 3,
                                             stride=4 if i == num_stages-1 else 2,
                                             in_chans=embed_dims[i],
-                                            embed_dim=embed_dims[i+1] if i != num_stages-1 else out_chans,
+                                            embed_dim=out_dims[i],
                                             output_padding=1 if i!=num_stages-1 else 3)
             norm = norm_layer(embed_dims[i])
             cur += depths[i]
@@ -293,7 +297,7 @@ class PyramidVisionTransformerDecoder(nn.Module):
     #     self.num_classes = num_classes
     #     self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
-    def forward_features(self, x):
+    def forward_features(self, x, out_mids):
         B = x.shape[0]
 
         for i in range(self.num_stages):
@@ -301,9 +305,13 @@ class PyramidVisionTransformerDecoder(nn.Module):
             block = getattr(self, f"block{i}")
             norm = getattr(self, f"norm{i}")
             # x, H, W = patch_embed(x)
-            # print('x0', x.shape)
+            # print('i x0',i, x.shape)
             if i==0:
                 H, W = int(np.sqrt(x.shape[1])), int(np.sqrt(x.shape[1]))
+            # print('outmd', out_mids[self.num_mid- i-1].shape)
+            # x += out_mids[self.num_mid- i]
+            x = torch.cat((out_mids[self.num_mid- i-1],x), dim=-1)
+            # print('cat', x.shape)
             # print('HW', H, W)
             for blk in block:
                 x = blk(x, H, W)
@@ -325,8 +333,40 @@ class PyramidVisionTransformerDecoder(nn.Module):
         # print('x', x.shape)
         return x
 
-    def forward(self, x):
-        x = self.forward_features(x)
+    # def forward_features(self, x):
+    #     B = x.shape[0]
+    #
+    #     for i in range(self.num_stages):
+    #         patch_embed = getattr(self, f"patch_embed{i}")
+    #         block = getattr(self, f"block{i}")
+    #         norm = getattr(self, f"norm{i}")
+    #         # x, H, W = patch_embed(x)
+    #         # print('x0', x.shape)
+    #         if i==0:
+    #             H, W = int(np.sqrt(x.shape[1])), int(np.sqrt(x.shape[1]))
+    #         # print('HW', H, W)
+    #         for blk in block:
+    #             x = blk(x, H, W)
+    #         x = norm(x)
+    #         # print('aff', x.shape)
+    #
+    #         x = x.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
+    #         if i != self.num_stages - 1:
+    #             x, H, W = patch_embed(x)
+    #         else:
+    #             x, H, W = patch_embed(x, norm=False)
+    #
+    #         # print('HW', H, W)
+    #     # x = x.transpose(1,2)
+    #     # print('x',x.shape)
+    #     # x = self.fc(x)
+    #     # x = x.transpose(1,2)
+    #     x = x.reshape(B, -1, H, W)
+    #     # print('x', x.shape)
+    #     return x
+
+    def forward(self, x, out_mids):
+        x = self.forward_features(x, out_mids)
         # x = self.head(x)
 
         return x

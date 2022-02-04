@@ -16,13 +16,14 @@ import re
 def filename(x):
     return int(re.sub('[^0-9]','', x.split('.')[0]))
 
+#for testing and defending
 class AttackDataset():
     def __init__(self, root_dir, channels, mode, data_path):
         super(AttackDataset, self).__init__()
         self.data_path = root_dir
-        self.img_dir = './output/scale_attck/{}/{}/'.format(data_path, mode)
+        self.adv_dir = './output/scale_attk/{}/{}/'.format(data_path, mode)
         self.label_dir = './data/{}/{}/gt/'.format(data_path,mode)
-        print('img dir', self.img_dir)
+        print('img dir', self.adv_dir)
         print('label dir', self.label_dir)
         npz_file = './data/{}/scl_attk_{}_{}.npz'.format(self.data_path,self.data_path, mode)
         self.images = []
@@ -30,7 +31,7 @@ class AttackDataset():
 
         if not os.path.exists(npz_file):
             print('not found existed dump', npz_file)
-            self.images, self.labels = self.read_files(self.img_dir, self.label_dir, channels, resize=False)
+            self.images, self.labels = self.read_files(self.adv_dir, self.label_dir, channels, resize=False)
             # print('checklabel', np.unique(data[i][1]))
             np.savez_compressed(npz_file,a=self.images,b=self.labels)
         else:
@@ -57,7 +58,8 @@ class AttackDataset():
         labels = torch.from_numpy(labels)
         return (image, labels)
 
-    def read_files(self, img_dir, label_dir, channels, width=256, height=256, resize=True):
+    @classmethod
+    def read_files(cls, img_dir, label_dir, channels, width=256, height=256, resize=True):
         images=[]
         labels=[]
         ls_names = os.listdir(label_dir)
@@ -65,7 +67,7 @@ class AttackDataset():
         for img_name in ls_names:
             if 'png' or 'bmp' or 'jpg' in img_name:
                 # print(self.img_dir,img_name[:-9]+'.png')
-                img_path = os.path.join(img_dir, img_name.replace('_mask', '').replace('bmp','png'))
+                img_path = os.path.join(img_dir, img_name.replace('_mask', ''))#.replace('bmp','png'))
                 label_path = os.path.join(label_dir, img_name)
                 # print('label', label_path)
                 # print('img path', img_path)

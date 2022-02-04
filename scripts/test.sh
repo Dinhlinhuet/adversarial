@@ -8,11 +8,11 @@
 #python tools/test_deeplab.py --model deeplabv3plus_resnet101 --output_stride 8 --channels 3 --classes 3 \
 #--output_path ./output/test/ --data_path fundus
 
-python tools/test_deeplab.py --model deeplabv3plus_mobilenet --output_stride 8 --channels 3 --classes 2 \
---output_path ./output/test/ --data_path brain
+#python tools/test_deeplab.py --model deeplabv3plus_mobilenet --output_stride 8 --channels 3 --classes 2 \
+#--output_path ./output/test/ --data_path brain
 
-#python tools/test_deeplab.py --model deeplabv3plus_resnet101 --output_stride 8 --channels 1 --classes 3 \
-#--output_path ./output/test/ --data_path octafull
+python tools/test_deeplab.py --model deeplabv3plus_resnet101 --output_stride 8 --channels 1 --classes 3 \
+--output_path ./output/test/ --data_path octafull
 
 #  python test.py --model UNet --channels 3 --model_path ./checkpoints/brain/UNet.pth --output_path \
 #  ./output/test/ --mode test --attacks DAG_A --adv_model UNet --data_path brain

@@ -10,10 +10,11 @@ import cv2
 from PIL import Image
 from matplotlib import pyplot as plt
 import glob
+import re
 
 
 def filename(x):
-    return int(x[1:-4])
+    return int(re.sub('[^0-9]','', x.split('.')[0]))
 
 class SampleDataset(Dataset):
     def __init__(self, root_dir, num_class, channels, mode, model=None, type=None, target_class=None, data_type='org',
@@ -129,8 +130,6 @@ class SampleDataset(Dataset):
                 test_org_data = np.load(npz_org_file)
                 self.labels = test_org_data['b']
                 print('not found existed dump adv',npz_file)
-                def filename(x):
-                    return int(x[:-4])
                 ls_names = sorted(os.listdir(self.img_dir),key=filename)
                 for img_name in ls_names:
                     if 'png' or 'bmp' in img_name:

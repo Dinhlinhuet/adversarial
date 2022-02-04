@@ -9,6 +9,8 @@ import time
 import random as rd
 import re
 
+def filename(x):
+    return int(re.sub('[^0-9]','', x.split('.')[0]))
 
 class DefenseDataset(Dataset):
     def __init__(self, data_path, phase, channels):
@@ -162,11 +164,22 @@ class DefenseSclDataset(Dataset):
             adv_data = np.load(adv_npz_file)
             self.adv_images = adv_data['a']
         print('load clean', npz_file)
-        data = np.load(npz_file)
-        self.images = data['a']
-        self.labels = data['b']
-        print('len advset', len(self.adv_images))
+        if 'octa' not in data_path:
+            data = np.load(npz_file)
+            self.images = data['a']
+            self.labels = data['b']
+        else:
+            self.img_dir = './data/{}/{}/imgs/'.format(data_path, phase)
+            self.label_dir = './data/{}/{}/gt/'.format(data_path, phase)
+            self.images, self.labels = read_files(self.img_dir, self.label_dir, channels, resize=False)
+            np.savez_compressed(npz_file, a=self.images, b=self.labels)
 
+        print('len advset', len(self.adv_images))
+        self.debug_cln_dir = './output/debug/clean/'
+        self.debug_attk_dir = './output/debug/attk/'
+        for i, img in enumerate(self.images):
+            cv2.imwrite(os.path.join(self.debug_cln_dir, '{}.png'.format(i)), img*255)
+            cv2.imwrite(os.path.join(self.debug_attk_dir, '{}.png'.format(i)), self.adv_images[i]*255)
 
     def __getitem__(self, index):
         # print("idx", index)
@@ -187,46 +200,6 @@ class DefenseSclDataset(Dataset):
 
     def __len__(self):
         return len(self.images)
-
-def augment(imgs, config, train):
-    if train:
-        np.random.seed(int(time.time() * 1000000) % 1000000000)
-
-    if 'flip' in config and config['flip'] and train:
-        stride = np.random.randint(2) * 2 - 1
-        for i in range(len(imgs)):
-            imgs[i] = imgs[i][:, ::stride, :]
-
-    if 'crop_size' in config:
-        crop_size = config['crop_size']
-        if train:
-            h = np.random.randint(imgs[0].shape[0] - crop_size[0] + 1)
-            w = np.random.randint(imgs[0].shape[1] - crop_size[1] + 1)
-        else:
-            h = int(imgs[0].shape[0] - crop_size[0]) / 2
-            w = int(imgs[0].shape[1] - crop_size[1]) / 2
-        for i in range(len(imgs)):
-            imgs[i] = imgs[i][h:h + crop_size[0], w:w + crop_size[1], :]
-
-    return imgs
-
-
-def normalize(imgs, net_type):
-    if net_type == 'inceptionresnetv2':
-        for i in range(len(imgs)):
-            imgs[i] = imgs[i].astype(np.float32)
-            imgs[i] = 2 * (imgs[i] / 255.0) - 1.0
-
-    else:
-        mean = np.asarray([0.485, 0.456, 0.406], np.float32).reshape((1, 1, 3))
-        std = np.asarray([0.229, 0.224, 0.225], np.float32).reshape((1, 1, 3))
-        for i in range(len(imgs)):
-            imgs[i] = imgs[i].astype(np.float32)
-            imgs[i] /= 255
-            imgs[i] -= mean
-            imgs[i] /= std
-
-    return imgs
 
 class DefenseSclTestDataset(Dataset):
     def __init__(self, data_path, phase, channels):
@@ -264,9 +237,15 @@ class DefenseSclTestDataset(Dataset):
             print('load adv', adv_npz_file)
             adv_data = np.load(adv_npz_file)
             self.adv_images = adv_data['a']
-        print('load clean', npz_file)
-        data = np.load(npz_file)
-        self.labels = data['b']
+        if os.path.exists(npz_file):
+            data = np.load(npz_file)
+            print('load clean', npz_file)
+            self.labels = data['b']
+        else:
+            self.img_dir = './data/{}/{}/imgs/'.format(data_path, phase)
+            self.label_dir = './data/{}/{}/gt/'.format(data_path, phase)
+            self.images, self.labels = read_files(self.img_dir, self.label_dir, channels, resize=False)
+            np.savez_compressed(npz_file, a=self.images, b=self.labels)
         print('len advset', len(self.adv_images))
 
 
@@ -284,3 +263,29 @@ class DefenseSclTestDataset(Dataset):
 
     def __len__(self):
         return len(self.labels)
+
+def read_files(img_dir, label_dir, channels, width=256, height=256, resize=True):
+    images=[]
+    labels=[]
+    ls_names = os.listdir(label_dir)
+    ls_names = sorted(ls_names, key=filename)
+    for img_name in ls_names:
+        if 'png' or 'bmp' or 'jpg' in img_name:
+            # print(self.img_dir,img_name[:-9]+'.png')
+            img_path = os.path.join(img_dir, img_name.replace('_mask', ''))#.replace('bmp','png'))
+            label_path = os.path.join(label_dir, img_name)
+            # print('label', label_path)
+            # print('img path', img_path)
+            if channels == 1:
+                org_img = cv2.imread(img_path, 0)
+            # print("imgname", img_name)
+            else:
+                org_img = cv2.imread(img_path)
+            label = cv2.imread(label_path, 0)
+            if resize:
+                org_img = cv2.resize(org_img, (height, width))
+                label = cv2.resize(label, (height, width), interpolation=cv2.INTER_NEAREST)
+            img = org_img / 255
+            images.append(img)
+            labels.append(label)
+    return images, labels

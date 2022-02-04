@@ -240,7 +240,8 @@ if __name__ == "__main__":
     # prefix = 'rd'
     # prefix = 'trf_rd'
     # guide_mode = 'SegNet'
-    prefix = 'pvt_scl'
+    # prefix = 'pvt_scl'
+    prefix = 'pvt_scl_plus_leff'
     guide_mode = 'UNet'
     # guide_mode = 'DenseNet'
     denoiser_path = os.path.join(args.denoiser_path, args.data_path, '{}_{}.pth'.format(guide_mode,prefix))

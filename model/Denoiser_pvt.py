@@ -9,12 +9,9 @@ from model.UNet_Denoiser import UNet
 from model.SegNet_Denoiser import SegNet
 from model.AgNet.core.AgNet_Denoiser import AG_Net
 from loss import onehot2norm, dice_loss
-from torch.autograd import Variable
-from model.transf import Transformer, _weights_init, Attention, BasicBlock
 from model.pvt_v2 import PyramidVisionTransformerEncoder
-from model.pvt_v2_decoder import PyramidVisionTransformerDecoder
-from einops import rearrange
-import torch.nn.init as init
+from model.pvt_v2_decoder import PyramidVisionTransformerDecoder, Block
+from model.DenoiseModules import BasicUformerLayer
 
 
 # from pytorch_msssim import SSIM,ssim
@@ -85,110 +82,96 @@ class Loss(nn.Module):
         return z
 
 class Denoise(nn.Module):
-    def __init__(self, img_size=256, in_chans=3, out_chans=3):
+    def __init__(self, img_size=256, in_chans=3, out_chans=3,
+                 embed_dim=[64, 160, 256, 512], depths=[2, 2, 2, 2], num_heads=[1, 2,4, 8],
+                 win_size=8, mlp_ratio=4., qkv_bias=True, qk_scale=None,
+                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
+                 norm_layer=nn.LayerNorm, se_layer=False,
+                 use_checkpoint=False, token_projection='linear', token_mlp='leff',
+                 **kwargs):
         super().__init__()
-        self.encoder = PyramidVisionTransformerEncoder(img_size=img_size, in_chans=in_chans, patch_size=4,
-                                                       embed_dims=[32, 64, 160, 256],
+        self.num_mid = 4
+        # self.encoder = PyramidVisionTransformerEncoder(img_size=img_size, in_chans=in_chans, patch_size=4,
+        #                                                embed_dims=[32, 64, 160, 256],
+        #                                                num_heads=[1, 2, 4, 8], mlp_ratios=[8, 8, 4, 4], qkv_bias=True,
+        #                                                norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 4, 6, 3],
+        #                                                sr_ratios=[8, 4, 2, 1], )
+        # self.decoder = PyramidVisionTransformerDecoder(img_size=img_size, patch_size=4, out_chans= out_chans,
+        #                                                embed_dims=[256, 160, 64, 32],
+        #                                                num_heads=[8, 4, 2, 1], mlp_ratios=[4, 4, 8, 8], qkv_bias=True,
+        #                                                norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 6, 4, 3],
+        #                                                sr_ratios=[1, 2, 4, 8], )
+        # self.encoder = PyramidVisionTransformerEncoder(img_size=img_size, in_chans=in_chans,
+        #                                                embed_dims=[64, 160, 256, 512],
+        #                                                num_heads=[1, 2, 4, 8], mlp_ratios=[8, 8, 4, 4], qkv_bias=True,
+        #                                                norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 4, 6, 3],
+        #                                                sr_ratios=[8, 4, 2, 1], )
+        # self.decoder = PyramidVisionTransformerDecoder(img_size=img_size, patch_size=4, out_chans= out_chans,
+        #                                                embed_dims=[512, 256, 160, 64],
+        #                                                num_heads=[8, 4, 2, 1], mlp_ratios=[4, 4, 8, 8], qkv_bias=True,
+        #                                                norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 6, 4, 3],
+        #                                                sr_ratios=[1, 2, 4, 8], num_mid=self.num_mid)
+        #concate
+        self.encoder = PyramidVisionTransformerEncoder(img_size=img_size, in_chans=in_chans,
+                                                       embed_dims=[64, 160, 256, 512],
                                                        num_heads=[1, 2, 4, 8], mlp_ratios=[8, 8, 4, 4], qkv_bias=True,
                                                        norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 4, 6, 3],
                                                        sr_ratios=[8, 4, 2, 1], )
-        self.decoder = PyramidVisionTransformerDecoder(img_size=img_size, patch_size=4, out_chans= out_chans,
-                                                       embed_dims=[256, 160, 64, 32],
+        self.bottle_neck = Block(
+                dim=512, num_heads=8, mlp_ratio=4, qkv_bias=True,
+                drop=0., attn_drop=attn_drop_rate, drop_path=0.1, norm_layer=partial(nn.LayerNorm, eps=1e-6),
+                sr_ratio=4, linear=False)
+        self.decoder = PyramidVisionTransformerDecoder(img_size=img_size, out_chans= out_chans,
+                                                       embed_dims=[1024, 512, 320, 128],
+                                                       out_dims=[256, 160, 64, out_chans],
                                                        num_heads=[8, 4, 2, 1], mlp_ratios=[4, 4, 8, 8], qkv_bias=True,
                                                        norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 6, 4, 3],
-                                                       sr_ratios=[1, 2, 4, 8], )
-        # self.sigmoid = nn.Sigmoid()
+                                                       sr_ratios=[1, 2, 4, 8], num_mid=self.num_mid)
+        mid_dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]
+        self.middle_blocks = nn.ModuleList([
+            BasicUformerLayer(dim=embed_dim[i],
+                            output_dim=embed_dim[i]//2,
+                            input_resolution=(img_size // 2**i,
+                                                img_size // 2**i),
+                            depth=depths[i],
+                            num_heads=num_heads[i],
+                            win_size=win_size,
+                            mlp_ratio=mlp_ratio,
+                            qkv_bias=qkv_bias, qk_scale=qk_scale,
+                            drop=drop_rate, attn_drop=attn_drop_rate,
+                            drop_path=mid_dpr,
+                            norm_layer=norm_layer,
+                            use_checkpoint=use_checkpoint,
+                            token_projection=token_projection,token_mlp=token_mlp,se_layer=se_layer)
+            for i in range(self.num_mid)])
 
     def forward(self, x):
-        out = self.encoder(x)
+        out, feature_maps = self.encoder(x)
         # print("len", len(self.fwd))
         # print('enc', out.shape)
-        out = self.decoder(out)
+        out_mids = []
+        for i in range(self.num_mid):
+            # print('feat', feature_maps[i].shape)
+            out_mid = self.middle_blocks[i](feature_maps[i])
+            # print('mid', out_mid.shape)
+            out_mids.append(out_mid)
+        # print("out", out.shape)
+        H,W = [int(np.sqrt(out.shape[1]))]*2
+        out = self.bottle_neck(out, H,W)
+        # print('out bottle', out.shape)
+        out = self.decoder(out, out_mids)
         # print('input', torch.min(x), torch.max(x))
         # out = self.sigmoid(out)
         # print("out", torch.min(out), torch.max(out), out.shape)
-        out = x-out
+        out = x+out
         return out
-
-
-class Conv(nn.Module):
-    def __init__(self, n_in, n_out, stride=1):
-        super(Conv, self).__init__()
-        self.conv = nn.Conv2d(n_in, n_out, kernel_size=3, stride=stride, padding=1, bias=False)
-        self.bn = nn.BatchNorm2d(n_out)
-        self.relu = nn.ReLU(inplace=False)
-
-    def forward(self, x):
-        out = self.conv(x)
-        out = self.bn(out)
-        out = self.relu(out)
-        return out
-
-
-# basic C
-class BasicConv2d(nn.Module):
-
-    def __init__(self, in_channels, out_channels, **kwargs):
-        super(BasicConv2d, self).__init__()
-        self.conv = nn.Conv2d(in_channels, out_channels, bias=False, **kwargs)
-        self.bn = nn.BatchNorm2d(out_channels, eps=0.001)
-        self.relu = nn.ReLU(inplace=False)
-
-    def forward(self, x):
-        x = self.conv(x)
-        x = self.bn(x)
-        x = self.relu(x)
-        return x
-
-
-class Bottleneck(nn.Module):
-    def __init__(self, n_in, n_out, stride=1, expansion=4):
-        super(Bottleneck, self).__init__()
-        self.conv1 = nn.Conv2d(n_in, n_out, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(n_out)
-        self.conv2 = nn.Conv2d(n_out, n_out, kernel_size=3, stride=stride, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(n_out)
-        self.conv3 = nn.Conv2d(n_out, n_out * expansion, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm2d(n_out * expansion)
-
-        self.downsample = None
-        if stride != 1 or n_in != n_out * expansion:
-            self.downsample = nn.Sequential(
-                nn.Conv2d(n_in, n_out * expansion, kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(n_out * expansion))
-
-        self.relu = nn.ReLU(inplace=True)
-
-    def forward(self, x):
-        residual = x
-
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-        out = self.conv2(out)
-        out = self.bn2(out)
-        out = self.relu(out)
-        out = self.conv3(out)
-        out = self.bn3(out)
-
-        if self.downsample is not None:
-            residual = self.downsample(x)
-
-        out += residual
-        out = self.relu(out)
-
-        return out
-
 
 class Net(nn.Module):
     def __init__(self, input_size, channels, num_class, n, hard_mining=0, loss_norm=False):
         super(Net, self).__init__()
         # print('inut', input_size)
         self.denoise = Denoise(img_size=input_size)
-        # self.net = Inception3(denoise, channels)
         self.net = UNet(self.denoise, channels, num_class)
-        # self.net = SegNet(denoise, channels, num_class)
-        # self.net = AG_Net(denoise, num_class)
         self.loss = Loss(n, hard_mining, loss_norm)
 
     def forward(self, device, orig_x, adv_x=None, train=True, defense=False):

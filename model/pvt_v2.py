@@ -289,7 +289,7 @@ class PyramidVisionTransformerEncoder(nn.Module):
 
     def forward_features(self, x):
         B = x.shape[0]
-
+        feature_maps = []
         for i in range(self.num_stages):
             patch_embed = getattr(self, f"patch_embed{i + 1}")
             block = getattr(self, f"block{i + 1}")
@@ -303,16 +303,17 @@ class PyramidVisionTransformerEncoder(nn.Module):
             x = norm(x)
             if i != self.num_stages - 1:
                 x = x.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
+                feature_maps.append(x.view(B, H*W, -1))
             else:
                 x = x.reshape(B, H * W, -1).contiguous()
-
-        return x
+                feature_maps.append(x)
+        return x, feature_maps
 
     def forward(self, x):
-        x = self.forward_features(x)
+        x, feature_maps = self.forward_features(x)
         # x = self.head(x)
 
-        return x
+        return x, feature_maps
 
 
 class DWConv(nn.Module):

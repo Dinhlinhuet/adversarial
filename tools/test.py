@@ -100,12 +100,13 @@ def test(model, args):
     
     # set testdataset
     # test org
-    test_dataset = SampleDataset(data_path, n_classes, n_channels, mode= 'test',
-            data_type='org',width=args.width,height=args.height)
+    # test_dataset = SampleDataset(data_path, n_classes, n_channels, mode= 'test',
+    #         data_type='org',width=args.width,height=args.height)
     # test adv
     # test_dataset = SegmentDataset(data_path,args.classes, args.channels, args.mode, None, args.adv_model, args.attacks,
     #                              args.target, args.data_type, args.width, args.height, args.mask_type, suffix)
-    # test_dataset = AttackDataset(args.data_path, args.channels, args.mode, args.data_path)
+    test_dataset = AttackDataset(args.data_path, args.channels, args.mode, args.data_path)
+    # test_dataset = AttackDataset(args.data_path, args.channels, 'train', args.data_path)
     
     test_loader = DataLoader(
         test_dataset,
