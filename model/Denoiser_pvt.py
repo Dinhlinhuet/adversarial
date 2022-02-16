@@ -164,6 +164,7 @@ class Denoise(nn.Module):
         # out = self.sigmoid(out)
         # print("out", torch.min(out), torch.max(out), out.shape)
         out = x+out
+        # out = x - out
         return out
 
 class Net(nn.Module):

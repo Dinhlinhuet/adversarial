@@ -13,7 +13,7 @@ def filename(x):
     return int(re.sub('[^0-9]','', x.split('.')[0]))
 
 class DefenseDataset(Dataset):
-    def __init__(self, data_path, phase, channels):
+    def __init__(self, data_path, phase, channels, data_type=''):
         assert phase == 'train' or phase == 'val' or phase == 'test'
         self.phase = phase
         # self.dataset = dataset
@@ -27,28 +27,8 @@ class DefenseDataset(Dataset):
         # adv_npz_file = './data/{}/denoiser/{}_adv_{}_{}_{}_{}.npz'.format(data_path,data_path,phase, 'UNet', 'DAG_A', '0')
         #fundus
         adv_list = []
-        combine = []
-        if data_path == 'fundus':
-            for cls in ['m1','m2']:
-                combine.append(('ifgsm',cls))
-                # adv_npz_file = './data/{}/denoiser/{}_adv_{}_{}_{}_{}.npz'.format(data_path, data_path, phase, 'UNet', 'ifgsm',
-                #                                                               cls)
-                # adv_list.append(adv_npz_file)
-        elif data_path == 'octa3mfull':
-            for cls in ['1','2']:
-                combine.append(('DAG_C', cls))
-                # adv_npz_file = './data/{}/denoiser/{}_adv_{}_{}_{}_{}.npz'.format(data_path,data_path,phase, 'UNet', 'DAG_C', cls)
-                # adv_list.append(adv_npz_file)
-            combine.append(('DAG_A', '0'))
-            # adv_npz_file = './data/{}/denoiser/{}_adv_{}_{}_{}_{}.npz'.format(data_path, data_path, phase, 'UNet',
-            #                                                                   'DAG_A', '0')
-            # adv_list.append(adv_npz_file)
-
-        #brain
-        # adv_npz_file = './data/{}/denoiser/{}_adv_{}_{}_{}_{}.npz'.format(data_path, data_path, phase, 'DenseNet', 'ifgsm',
-        #                                                                   '1')
-        # adv_npz_file = './data/{}/denoiser/{}_adv_{}_{}_{}_{}.npz'.format(data_path, data_path, phase, 'UNet',
-        #                                                                   'pgd','1')
+        # combine = [('DAG_A', 'm1t0'), ('DAG_B', 'm2t0'),('DAG_C', 'm3t1') ]
+        combine = [('DAG_A', 'm1t0'), ('DAG_C', 'm3t1')]
         if not os.path.exists('./data/{}/denoiser/'.format(data_path)):
             os.mkdir('./data/{}/denoiser/'.format(data_path))
         for comb in combine:
@@ -59,14 +39,13 @@ class DefenseDataset(Dataset):
             if not os.path.exists(adv_npz_file):
                 print("not found", adv_npz_file)
                 #fundus
-                adv_dir = './output/adv/{}/{}/{}/{}/{}/'.format(data_path, phase, 'UNet', comb[0],comb[1])
+                adv_dir = './output/adv/{}/{}/{}/{}/{}/{}/'.format(data_path, phase, 'UNet', data_type, comb[0],comb[1])
+                print('adv dir', adv_dir)
                 # adv_dir = './output/adv/{}/{}/{}/{}/{}/'.format(data_path, phase, 'UNet', 'pgd','1')
                 # brain
                 # adv_dir = './output/adv/{}/{}/{}/{}/{}/'.format(data_path, phase, 'UNet', 'pgd','1')
                 # adv_dir = './output/adv/{}/{}/{}/{}/{}/'.format(data_path, phase, 'UNet', 'DAG_A', '0')
                 # adv_dir = './output/adv/{}/{}/{}/{}/'.format(data_path, phase, 'SegNet', 'DAG_C')
-                def filename(x):
-                    return int(x[:-4])
 
                 ls_names = sorted(os.listdir(adv_dir), key=filename)
                 # print('lsname', ls_names)
@@ -87,6 +66,7 @@ class DefenseDataset(Dataset):
                 print('load adv', adv_npz_file)
                 adv_data = np.load(adv_npz_file)
                 adv_images = adv_data['a']
+            print('len each set', len(adv_images))
             self.adv_npz_list.append(adv_images)
         print('load clean', npz_file)
         data = np.load(npz_file)
@@ -175,11 +155,13 @@ class DefenseSclDataset(Dataset):
             np.savez_compressed(npz_file, a=self.images, b=self.labels)
 
         print('len advset', len(self.adv_images))
-        self.debug_cln_dir = './output/debug/clean/'
-        self.debug_attk_dir = './output/debug/attk/'
-        for i, img in enumerate(self.images):
-            cv2.imwrite(os.path.join(self.debug_cln_dir, '{}.png'.format(i)), img*255)
-            cv2.imwrite(os.path.join(self.debug_attk_dir, '{}.png'.format(i)), self.adv_images[i]*255)
+        debug = False
+        if debug:
+            self.debug_cln_dir = './output/debug/clean/'
+            self.debug_attk_dir = './output/debug/attk/'
+            for i, img in enumerate(self.images):
+                cv2.imwrite(os.path.join(self.debug_cln_dir, '{}.png'.format(i)), img*255)
+                cv2.imwrite(os.path.join(self.debug_attk_dir, '{}.png'.format(i)), self.adv_images[i]*255)
 
     def __getitem__(self, index):
         # print("idx", index)

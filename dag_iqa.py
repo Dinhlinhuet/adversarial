@@ -225,7 +225,7 @@ def DAG(args, model,image,ground_truth,adv_target,num_iterations=20,gamma=0.07,n
     return  np_img
 
 
-def cw(args, idx, model, image, ground_truth, adv_target, num_iterations=20, gamma=0.07, no_background=True,
+def cw(args, idx, model, image, ground_truth, oh_label, adv_target, num_iterations=20, gamma=0.07, no_background=True,
         background_class=0, device='cuda:0', verbose=False):
     '''
     Generates adversarial example for a given Image
@@ -277,7 +277,7 @@ def cw(args, idx, model, image, ground_truth, adv_target, num_iterations=20, gam
     #     background[:, background_class, :, :] = torch.ones((background.shape[2], background.shape[3]))
     #     background = background.to(device)
 
-    if torch.all(torch.eq(ground_truth, adv_target)):
+    if torch.all(torch.eq(oh_label, adv_target)):
         # print('equally')
         np_img = image[0].detach().cpu().numpy()
         np_img = np.moveaxis(np_img, 0, -1)
@@ -310,7 +310,7 @@ def cw(args, idx, model, image, ground_truth, adv_target, num_iterations=20, gam
         prediction_iteration.append(predictions[0].cpu().numpy())
         # print('pre', predictions.size(), ground_truth.size())
         # select correct pixels Tn
-        condition1=torch.eq(predictions,ground_truth)
+        condition1=torch.eq(predictions,oh_label)
         condition=condition1
 
         if no_background:
@@ -341,7 +341,7 @@ def cw(args, idx, model, image, ground_truth, adv_target, num_iterations=20, gam
         # print('output', output.size())
         adv_log = torch.mul(output, adv_target)
         # Getting the values of the original output
-        clean_log = torch.mul(output, ground_truth)
+        clean_log = torch.mul(output, oh_label)
         adv_direction = adv_log - clean_log
         # r_m = torch.mul(adv_direction, condition)
         r_m = adv_direction

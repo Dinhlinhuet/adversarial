@@ -1,16 +1,13 @@
 import torch
 import torch.nn as nn
 import numpy as np
-import sklearn.metrics as metrics
 
 import os
 import argparse
 import time
-from model.AgNet.core.utils import calculate_Accuracy, get_model, dice_loss
+from model.AgNet.core.utils import  get_model, dice_loss
 from pylab import *
-import random
-from torch.utils.data import DataLoader,Sampler
-from torchvision import transforms
+from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 from sklearn.model_selection import train_test_split
 from dataset.dataset import SampleDataset, AgDataset

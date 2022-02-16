@@ -15,7 +15,23 @@ def ensure_dir(path):
 def generate_target_bs(idx, y_test, target_class=1, width=256, height=256):
     y_target = y_test
     # print('yt', y_target.size(), y_target[0].size())
+    # print('tar', target_class)
+    # print('ytarget bef', torch.sum(y_target), torch.unique(y_target))
     y_target[y_target == target_class] = 0
+    # print('ytarget af', torch.sum(y_target), torch.unique(y_target))
+    # npimg = np.uint8((y_target * (255/2)).cpu().numpy())
+    # print('ytg', npimg.shape)
+    # cv2.imwrite('./output/debug/ytarget/fundus/dilated_{}.png'.format(idx),npimg[0])
+    return y_target
+
+def generate_target_swap_cls(idx, y_test, target_class=1, width=256, height=256):
+    y_target = y_test
+    # print('yt', y_target.size(), y_target[0].size())
+    # print('tar', target_class)
+    # print('ytarget bef', torch.sum(y_target), torch.unique(y_target))
+    y_target[y_target == target_class] = 1-target_class
+    y_target[y_target == 1-target_class] = target_class
+    # print('ytarget af', torch.sum(y_target), torch.unique(y_target))
     # npimg = np.uint8((y_target * (255/2)).cpu().numpy())
     # print('ytg', npimg.shape)
     # cv2.imwrite('./output/debug/ytarget/fundus/dilated_{}.png'.format(idx),npimg[0])

@@ -33,6 +33,18 @@ def get_argparser():
     # Datset Options
     parser.add_argument('--data_path', dest='data_path',type=str,
                       default='data/samples', help='data path')
+    parser.add_argument('--attacks', dest='attacks', type=str, default="",
+                      help='attack types: Rician, DAG_A, DAG_B, DAG_C')
+    parser.add_argument('--target', dest='target', default='0', type=str,
+                      help='target class')
+    parser.add_argument('--mask_type', dest='mask_type', default="", type=str,
+                      help='adv mask')
+    parser.add_argument('--adv_model', dest='adv_model', type=str,default='',
+                      help='model name(UNet, SegNet, DenseNet)')
+    parser.add_argument('--mode', dest='mode', type=str, default='test',
+                                            help='mode test origin or adversarial')
+    parser.add_argument('--data_type', dest='data_type', type=str,default='',
+                      help='org or DAG')
     parser.add_argument('--epochs', dest='epochs', default=50, type=int,
                       help='number of epochs')
     parser.add_argument("--classes", type=int, default=1,
@@ -103,16 +115,23 @@ def test():
     data_path = args.data_path
     n_classes = args.classes
     n_channels = args.channels
+    suffix = args.suffix
     #for fundus and brain
     if 'octa' in data_path:
         # test_dataset = SampleDataset(data_path, n_classes, n_channels, mode= 'train',
         #     data_type='org',width=args.width,height=args.height)
-        test_dataset = AttackDataset(args.data_path, args.channels, 'test', args.data_path)
+        # test_dataset = AttackDataset(args.data_path, args.channels, 'test', args.data_path)
+        test_dataset = SegmentDataset(data_path, args.classes, args.channels, args.mode, None, args.adv_model,
+                                      args.attacks,
+                                      args.target, args.data_type, args.width, args.height, args.mask_type, suffix)
         test_sampler = SubsetRandomSampler(np.arange(len(test_dataset)))
     else:
         # test_dataset = SegmentDataset(data_path, n_classes, n_channels, mode= 'test', gen_mode=None,model=None,
         #     type=None,target_class=None,data_type='org',width=args.width,height=args.height, mask_type=None, suffix=None)
-        test_dataset = AttackDataset(args.data_path, args.channels, 'test', args.data_path)
+        test_dataset = SegmentDataset(data_path, args.classes, args.channels, args.mode, None, args.adv_model,
+                                      args.attacks,
+                                      args.target, args.data_type, args.width, args.height, args.mask_type, suffix)
+        # test_dataset = AttackDataset(args.data_path, args.channels, 'test', args.data_path)
         test_sampler = SubsetRandomSampler(np.arange(len(test_dataset)))
     print('total test image : {}'.format(len(test_sampler)))
 
@@ -124,7 +143,7 @@ def test():
         sampler=test_sampler
     )
 
-    print('num class', args.classes, 'out stride', args.output_stride)
+    print('model', args.model, 'num class', args.classes, 'out stride', args.output_stride)
     # Set up model (all models are 'constructed at deeplab.modeling)
     model = deeplab.modeling.__dict__[args.model](num_classes=args.classes, output_stride=args.output_stride,
                                                   in_channels=args.channels, pretrained_backbone=False)

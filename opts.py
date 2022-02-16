@@ -24,7 +24,7 @@ def get_args():
     parser.add_argument('--model', dest='model', type=str,
                       help='model name(UNet, SegNet, DenseNet)')
     parser.add_argument('--attacks', dest='attacks', type=str, default="",
-                      help='attack types: Rician, DAG_A, DAG_B, DAG_C')
+                      help='attack types: DAG_A, DAG_B, DAG_C')
     parser.add_argument('--target', dest='target', default='0', type=str,
                       help='target class')
     parser.add_argument('--mask_type', dest='mask_type', default="", type=str,
@@ -43,6 +43,8 @@ def get_args():
                       default='', help='suffix to purpose')
     parser.add_argument('--output_path', dest='output_path', type=str,
                       default='./output', help='output_path')
+    parser.add_argument('--adv_path', dest='adv_path', type=str,
+                      default='./output/adv/', help='adv_path')
     parser.add_argument('--save-dir', default='./checkpoints/denoiser/', type=str, metavar='SAVE',
                         help='directory to save checkpoint (default: none)')
     parser.add_argument('--target_model', default='./checkpoints/', type=str, metavar='PATH',
@@ -53,6 +55,8 @@ def get_args():
                         help='path to latest checkpoint (default: none)')
     parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                                               help='manual epoch number (useful on restarts)')
+    parser.add_argument('--generator_path', dest='generator_path', type=str,
+                      default='checkpoints/stargan_/', help='generator_path')
     parser.add_argument('--denoiser_path', dest='denoiser_path', type=str,
                       default='checkpoints/denoiser/', help='denoiser_path')
     parser.add_argument('--denoise_output', dest='denoise_output', type=str,
@@ -64,6 +68,6 @@ def get_args():
     parser.add_argument("--separable_conv", action='store_true', default=False,
                         help="apply separable conv to decoder and aspp")
     parser.add_argument("--output_stride", type=int, default=16, choices=[8, 16])
-
+    parser.add_argument('--exp_folder', type=str, default='./output/adv/exps', help='Experiment folder to store all output.')
     args = parser.parse_args()
     return args

@@ -170,7 +170,7 @@ class Denoise(nn.Module):
         # out = torch.clamp(out, 0, 1)
         # norm = torch.sqrt(torch.sum(out**2))
         # out = out / norm
-        out = self.sigmoid(out)
+        # out = self.sigmoid(out)
         # print("out", torch.min(out), torch.max(out))
         return out
 

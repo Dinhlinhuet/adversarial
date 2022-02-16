@@ -468,7 +468,7 @@ if __name__ == "__main__":
     
     n_channels = args.channels
     n_classes = args.classes
-    target_dir = './checkpoints/'
+    target_dir = '../checkpoints/'
     if args.model == 'UNet' or 'SegNet' or 'DenseNet' or 'AgNet':
         args.target_model = '{}/{}/{}.pth'.format(target_dir, args.data_path, args.model)
     else :

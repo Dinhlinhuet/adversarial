@@ -11,15 +11,19 @@ import os
 import argparse
 import time
 from pylab import *
-from dataset.dataset import AgDataset
-from dataset.scale_att_dataset import AttackDataset
 from torch.utils.data import DataLoader
 from matplotlib import pyplot as plt
 from PIL import Image
+from os import path
+import sys
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+print(path.dirname(path.dirname(path.abspath(__file__))))
+
 from util import make_one_hot
 from model.AgNet.core.utils import get_model, dice_loss
 from opts import get_args
-
+from dataset.dataset import AgDataset
+from dataset.scale_att_dataset import AttackDataset
 # --------------------------------------------------------------------------------
 
 # # --------------------------------------------------------------------------------
@@ -93,9 +97,11 @@ def fast_test(model, args, model_name):
     # SP = []
     # AUC = []
     suffix = args.suffix
-    # test_dataset = AgDataset(args.data_path, args.classes, args.channels, args.mode, args.adv_model, args.attacks, args.target,
-    #                              args.data_type, args.width, args.height, args.mask_type, suffix)
-    test_dataset = AttackDataset(args.data_path, args.channels, args.mode, args.data_path)
+    if args.attacks !='scl_attk':
+        test_dataset = AgDataset(args.data_path, args.classes, args.channels, args.mode, args.adv_model, args.attacks, args.target,
+                                     args.data_type, args.width, args.height, args.mask_type, suffix)
+    else:
+        test_dataset = AttackDataset(args.data_path, args.channels, args.mode, args.data_path)
     test_loader = DataLoader(
         test_dataset,
         batch_size=args.batch_size,
@@ -136,7 +142,7 @@ def fast_test(model, args, model_name):
         labels = make_one_hot(labels, args.classes, device)
         dice = dice_loss(ppi, labels).detach().cpu().numpy()
         dices.append(dice)
-        print('dice score', dice)
+        # print('dice score', dice)
         # meanIU, Acc,Se,Sp,IU = calculate_Accuracy(my_confusion)
         # Auc = roc_auc_score(tmp_gt, y_pred)
         # AUC.append(Auc)

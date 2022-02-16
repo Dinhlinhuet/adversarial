@@ -17,7 +17,8 @@ from os import path
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 print(path.dirname(path.dirname(path.abspath(__file__))))
 from util import make_one_hot
-# from dataset.dataset import SampleDataset
+from dataset.dataset import AgDataset
+from dataset.semantic_dataset import SampleDataset
 from dataset.scale_att_dataset import AttackDataset
 from data import DefenseDataset, DefenseSclTestDataset
 from model import UNet, SegNet, DenseNet
@@ -94,13 +95,16 @@ def test(model, denoiser, args):
     # args.output_path = '{}/{}/{}/{}/{}/'.format(args.output_path,args.data_path,args.model,args.adv_model, args.attacks)
     # args.output_path = os.path.join(args.output_path, args.data_path,'512', args.model, args.adv_model,
     #                                 args.data_type, args.attacks)
-    # args.output_path = os.path.join(args.output_path, args.data_path, args.model, args.adv_model,
-    #                                 args.data_type, args.attacks, 'm'+ args.mask_type+'t'+args.target, suffix)
-    # args.denoise_output = os.path.join(args.denoise_output, args.data_path, args.model, args.adv_model,
-    #                                 args.data_type, args.attacks, 'm'+ args.mask_type+'t'+args.target, suffix)
-    args.output_path = '{}/{}/{}/{}/'.format(args.output_path,args.data_path,args.model,args.attacks)
-    args.denoise_output = os.path.join(args.denoise_output, args.data_path, args.model,
-                                    args.data_type, args.attacks, suffix)
+
+    if args.attacks =='scl_attk':
+        args.output_path = '{}/{}/{}/{}/'.format(args.output_path,args.data_path,args.model,args.attacks)
+        args.denoise_output = os.path.join(args.denoise_output, args.data_path, args.model,
+                                        args.data_type, args.attacks, suffix)
+    else:
+        args.output_path = os.path.join(args.output_path, args.data_path, args.model, args.adv_model,
+                                        args.data_type, args.attacks, 'm'+ args.mask_type+'t'+args.target, suffix)
+        args.denoise_output = os.path.join(args.denoise_output, args.data_path, args.model, args.adv_model,
+                                        args.data_type, args.attacks, 'm'+ args.mask_type+'t'+args.target, suffix)
     print('output path', args.output_path)
     print('denoised image path', args.denoise_output)
     device = torch.device(args.device)
@@ -114,6 +118,15 @@ def test(model, denoiser, args):
     #                              args.target, args.data_type, args.width, args.height, args.mask_type, suffix)
     if args.attacks=='scl_attk':
         test_dataset = DefenseSclTestDataset(data_path, 'test', args.channels)
+    elif args.attacks=='semantic':
+        if args.data_path=='brain':
+            test_dataset = AgDataset(data_path, n_classes, args.channels, args.mode, args.model, \
+                             args.attacks, args.target, args.data_type, args.width, args.height, args.mask_type,
+                             suffix=args.suffix)
+        else:
+            test_dataset = SampleDataset(data_path, n_classes, args.channels, args.mode, args.model, \
+                                     args.attacks, args.target, args.attacks, args.width, args.height, args.mask_type,
+                                     suffix=args.suffix)
     else:
         test_dataset = AttackDataset(args.data_path, args.channels, args.mode, args.data_path)
 
@@ -146,7 +159,7 @@ def test(model, denoiser, args):
         
             inputs = inputs.to(device).float()
             labels = labels.to(device).long()
-            if args.attacks == 'scl_attk':
+            if args.attacks == 'scl_attk' or args.attacks=='semantic':
                 target = make_one_hot(labels, n_classes, device)
             else:
                 target = make_one_hot(labels[:, 0, :, :], n_classes, device)
@@ -242,9 +255,13 @@ if __name__ == "__main__":
     # guide_mode = 'SegNet'
     # prefix = 'pvt_scl'
     prefix = 'pvt_scl_plus_leff'
+    # prefix = 'pvt_scl_plus_leff_sub'
     guide_mode = 'UNet'
     # guide_mode = 'DenseNet'
-    denoiser_path = os.path.join(args.denoiser_path, args.data_path, '{}_{}.pth'.format(guide_mode,prefix))
+    if 'scl' in args.attacks:
+        denoiser_path = os.path.join(args.denoiser_path, args.data_path, '{}_{}.pth'.format(guide_mode,prefix))
+    else:
+        denoiser_path = os.path.join(args.denoiser_path, args.data_path, args.attacks, '{}_{}.pth'.format(guide_mode, prefix))
     # denoiser_path = os.path.join(args.denoiser_path, args.data_path, '{}.pth'.format(guide_mode))
     print('denoiser ', denoiser_path)
     # denoiser = get_net(args.height, args.width, args.classes, args.channels, denoiser_path, args.batch_size)

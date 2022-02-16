@@ -8,10 +8,10 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchsummary import summary
 import copy
-import pickle
 from matplotlib import pyplot as plt
 from matplotlib import cm
 from PIL import Image
+import cv2
 from optparse import OptionParser
 from os import path
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
@@ -91,9 +91,14 @@ def test(model, args):
     # else:
     #     args.output_path = os.path.join(args.output_path, args.data_path, args.model, args.adv_model,
     #                                     args.data_type, args.attacks, args.target)
-    args.output_path = os.path.join(args.output_path, args.data_path, args.model, args.mode, args.suffix)
-    print('output path', args.output_path)
-
+    output_path = os.path.join(args.output_path, args.data_path, args.model, args.mode, args.suffix)
+    print('output path', output_path)
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+    # adv_path = os.path.join(args.adv_path, args.data_path, args.model, args.mode, args.suffix)
+    # if not os.path.exists(adv_path):
+    #     os.makedirs(adv_path)
+    # print('adv path', adv_path)
     device = torch.device(args.device)
         
     model = model.to(device)
@@ -102,11 +107,13 @@ def test(model, args):
     # test org
     # test_dataset = SampleDataset(data_path, n_classes, n_channels, mode= 'test',
     #         data_type='org',width=args.width,height=args.height)
-    # test adv
-    # test_dataset = SegmentDataset(data_path,args.classes, args.channels, args.mode, None, args.adv_model, args.attacks,
-    #                              args.target, args.data_type, args.width, args.height, args.mask_type, suffix)
-    test_dataset = AttackDataset(args.data_path, args.channels, args.mode, args.data_path)
-    # test_dataset = AttackDataset(args.data_path, args.channels, 'train', args.data_path)
+    if args.attacks == 'scale_attk':
+        test_dataset = AttackDataset(args.data_path, args.channels, args.mode, args.data_path)
+        # test_dataset = AttackDataset(args.data_path, args.channels, 'train', args.data_path)
+    else:
+        # test adv
+        test_dataset = SegmentDataset(data_path,args.classes, args.channels, args.mode, None, args.adv_model, args.attacks,
+                                     args.target, args.data_type, args.width, args.height, args.mask_type, suffix)
     
     test_loader = DataLoader(
         test_dataset,
@@ -146,6 +153,7 @@ def test(model, args):
             avg_score += loss.data.cpu().numpy()
             # print('af',len(pred.data.cpu().numpy()))
             masks=onehot2norm(np.asarray(masks.data.cpu()))
+            # inputs = torch.movedim(inputs,1,-1)
             # print('onehotcvt', masks.shape)
             for i,mask in enumerate(masks):
                 # print(np.unique(mask))
@@ -156,7 +164,11 @@ def test(model, args):
                 # print(np.unique(cm(mask)))
                 # print('min,ma', np.min(output), np.max(output), output.shape)
                 output= Image.fromarray(output)
-                output.save(os.path.join(args.output_path,'{}.png'.format(batch_idx*args.batch_size+i)))
+                output.save(os.path.join(output_path,'{}.png'.format(batch_idx*args.batch_size+i)))
+                # adv = inputs[i]*255
+                # adv = np.uint8(adv.data.cpu().numpy())
+                # # adv = Image.fromarray(adv)
+                # cv2.imwrite(os.path.join(adv_path,'{}.png'.format(batch_idx*args.batch_size+i)),adv)
             
             del inputs, labels, target, pred, loss
             
