@@ -5,17 +5,20 @@ import numpy as np
 import os
 import argparse
 import time
+from os import path
+import sys
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+print(path.dirname(path.dirname(path.abspath(__file__))))
 from model.AgNet.core.utils import  get_model, dice_loss
 from pylab import *
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 from sklearn.model_selection import train_test_split
 from dataset.dataset import SampleDataset, AgDataset
+from dataset.lung_dataset import CovidAgDataset
 from util import make_one_hot
 
 # --------------------------------------------------------------------------------
-
-models_list = ['AG_Net']
 
 # --------------------------------------------------------------------------------
 parser = argparse.ArgumentParser(description='PyTorch ASOCT_Demo')
@@ -26,6 +29,8 @@ parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                   help='manual epoch number (useful on restarts)')
 parser.add_argument('--n_class', type=int, default=3,
                     help='the channel of out img, decide the num of class, ASOCT_eyes is 2/4 class')
+parser.add_argument('--channels', type=int, default=3,
+                    help='channels')
 parser.add_argument('--lr', type=double, default=0.0015,
                     help='initial learning rate')
 parser.add_argument('--GroupNorm', type=bool, default=True,
@@ -39,62 +44,55 @@ parser.add_argument('--data_path', type=str, default='../data/fundus/test/',
                     help='dir of the all img')
 parser.add_argument('--save-dir', default='./checkpoints/', type=str,
                   help='directory to save checkpoint (default: none)')
-parser.add_argument('--model_id', type=int, default=0,
-                    help='the id of choice_model in models_list')
 parser.add_argument('--batch_size', type=int, default=2,
                     help='the num of img in a batch')
 parser.add_argument('--img_size', type=int, default=256,
                     help='the train img size')
-parser.add_argument('--my_description', type=str, default='test8',
-                    help='some description define your train')
+parser.add_argument('--width', type=int, default=256,
+                    help='the train img size')
+parser.add_argument('--height', type=int, default=256,
+                    help='the train img size')
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
                         help='path to latest checkpoint (default: none)')
 # ---------------------------
 # GPU
 # ---------------------------
-parser.add_argument('--gpu', type=bool, default=True,
-                    help='dir of the all ori img')
-parser.add_argument('--gpu_avaiable', type=str, default='1',
-                    help='the gpu used')
+parser.add_argument('--device', type=int, default=0,
+                    help='device ')
 
 args = parser.parse_args()
 print(args)
 # --------------------------------------------------------------------------------
 
-gpu = args.gpu
-device_ids = []
-if gpu:
-
-    if not torch.cuda.is_available():
-        print("No cuda available")
-        raise SystemExit
-
-    device = torch.device(0)
-
-else:
-    device = torch.device("cpu")
-model_name = models_list[args.model_id]
+device = torch.device(args.device)
+model_name = 'Ag_Net'
 model = get_model(model_name)
 
-model = model(n_classes=args.n_class, bn=args.GroupNorm, BatchNorm=args.BatchNorm)
+model = model(n_classes=args.n_class, n_channels=args.channels, bn=args.GroupNorm, BatchNorm=args.BatchNorm)
 model = model.to(device)
-
-# if args.gpu:
-#     model.cuda()
-#     print('GPUs used: (%s)' % args.gpu_avaiable)
-#     print('------- success use GPU --------')
 
 n_class = args.n_class
 EPS = 1e-12
 # define path
 data_path = args.data_path
-train_dataset = AgDataset(data_path, n_class, 3, 'train',None,None,None,'org', args.img_size, args.img_size)
-# val_dataset = AgDataset(data_path, n_class,3, 'val', None, None, None, 'org', args.img_size, args.img_size)
-# train_sampler = SubsetRandomSampler(np.arange(len(train_dataset)))
-# val_sampler = SubsetRandomSampler(np.arange(len(val_dataset)))
-train_indices, val_indices = train_test_split(np.arange(len(train_dataset)), test_size=0.2, random_state=42)
-train_sampler = SubsetRandomSampler(train_indices)
-val_sampler = SubsetRandomSampler(val_indices)
+if 'lung' in data_path:
+    train_dataset = CovidAgDataset(data_path, n_class, args.channels, mode='train', model=None,
+                                 data_type='org', width=args.width, height=args.height)
+    val_dataset = CovidAgDataset(data_path, n_class, args.channels, mode='val', model=None,
+                               data_type='org', width=args.width, height=args.height)
+    train_sampler = SubsetRandomSampler(np.arange(len(train_dataset)))
+    val_sampler = SubsetRandomSampler(np.arange(len(val_dataset)))
+elif 'fundus' in data_path:
+    train_dataset = AgDataset(data_path, n_class, 3, 'train',None,None,None,'org', args.img_size, args.img_size)
+    val_dataset = AgDataset(data_path, n_class,3, 'val', None, None, None, 'org', args.img_size, args.img_size)
+    train_sampler = SubsetRandomSampler(np.arange(len(train_dataset)))
+    val_sampler = SubsetRandomSampler(np.arange(len(val_dataset)))
+else:
+    train_dataset = AgDataset(data_path, n_class, 3, 'train', None, None, None, 'org', args.img_size, args.img_size)
+    train_indices, val_indices = train_test_split(np.arange(len(train_dataset)), test_size=0.2, random_state=42)
+    train_sampler = SubsetRandomSampler(train_indices)
+    val_sampler = SubsetRandomSampler(val_indices)
+
 print('total train image : {}'.format(len(train_sampler)))
 print('total val image : {}'.format(len(val_sampler)))
 
@@ -105,20 +103,23 @@ train_loader = DataLoader(
     sampler=train_sampler,
     drop_last= True
 )
-val_loader = DataLoader(
-    train_dataset,
-    batch_size=args.batch_size,
-    num_workers=4,
-    sampler=val_sampler,
-    drop_last=True
-)
-# val_loader = DataLoader(
-#     val_dataset,
-#     batch_size=args.batch_size,
-#     num_workers=4,
-#     sampler=val_sampler,
-#     drop_last=True
-# )
+if 'lung' in data_path or 'fundus' in data_path:
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=args.batch_size,
+        num_workers=4,
+        sampler=val_sampler,
+        drop_last=True
+    )
+else:
+    val_loader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        num_workers=4,
+        sampler=val_sampler,
+        drop_last=True
+    )
+
 
 if args.resume:
     checkpoint = torch.load(args.resume)
@@ -127,10 +128,9 @@ save_dir = args.save_dir
 model_folder = os.path.abspath('./{}/{}/'.format(save_dir, args.data_path))
 if not os.path.exists(model_folder):
     os.makedirs(model_folder)
-model_path = os.path.join(model_folder, 'AgNet_tp_full.pth')
+model_path = os.path.join(model_folder, 'AgNet.pth')
 # img_list = get_img_list(args.data_path, flag='train')
 # test_img_list = get_img_list(args.data_path, flag='test')
-
 
 optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr)
 model = model.double()
@@ -169,7 +169,7 @@ for epoch in range(start_epoch,num_epochs+start_epoch):
         out, side_5, side_6, side_7, side_8 = model(images)
         # print('out', out.size(), masks.size())
         out = torch.log(softmax_2d(out) + EPS)
-        # print('out', out.size())
+        # print('out', out.size(), masks.shape)
         loss = criterion(out, masks)
         loss += criterion(torch.log(softmax_2d(side_5) + EPS), masks)
         loss += criterion(torch.log(softmax_2d(side_6) + EPS), masks)

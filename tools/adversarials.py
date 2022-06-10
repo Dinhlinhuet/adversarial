@@ -12,16 +12,18 @@ import os
 import cv2
 
 from os import path
-sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+sys.path.insert(0,path.dirname(path.dirname(path.abspath(__file__))))
 print(path.dirname(path.dirname(path.abspath(__file__))))
 from model import UNet, SegNet, DenseNet
 
 from dataset.dataset import SampleDataset, AgDataset
+from dataset.lung_dataset import CovidDataset
 from pytorch_msssim import ms_ssim, ssim,  SSIM, MS_SSIM
 from dag import DAG
 from dag_iqa import cw
 # from dag_iqa import DAG
-from dag_utils import generate_target, generate_target_swap, generate_target_bs, generate_target_swap_cls
+from dag_utils import generate_target, generate_target_swap, generate_target_bs, generate_target_swap_cls,\
+    generate_target_swap_rd
 from util import make_one_hot
 from attacks.fgsm import i_fgsm, pgd
 from attacks.spt import attack
@@ -40,7 +42,11 @@ def load_data(args):
     # generate loader
     # test_dataset = AgDataset(data_path, n_classes, args.channels, 'adv',args.model,args.attacks, None,'org',
     #                              args.width, args.height)
-    test_dataset = AgDataset(data_path, n_classes, args.channels, args.mode, args.model, \
+    if 'lung' in data_path:
+        test_dataset = CovidDataset(data_path, n_classes, n_channels, mode=args.mode, model=None,attack_type=args.attacks,
+                data_type='org', mask_type=None, target_class=None, suffix=args.suffix, width=args.width, height=args.height)
+    else:
+        test_dataset = AgDataset(data_path, n_classes, args.channels, args.mode, args.model, \
                              args.data_type, args.target, 'org', args.width, args.height, args.mask_type,
                              suffix=args.suffix)
     # test_dataset = SampleDataset(data_path, n_classes, args.channels, 'adv', args.mode, args.model, None,\
@@ -56,7 +62,7 @@ def load_data(args):
     
     return test_dataset, test_loader
 
-def Attack(model, test_loader, args):
+def Attack(model, test_loader,device, args):
     
     # Hyperparamter for DAG 
     
@@ -66,8 +72,7 @@ def Attack(model, test_loader, args):
     # gamma = 1
 
     batch_size = args.batch_size
-    device = torch.device(args.device)
-        
+
     model = model.to(device)
     model.eval()
     for param in model.parameters():
@@ -79,8 +84,8 @@ def Attack(model, test_loader, args):
     # if 'oct' in args.data_path:
     #     adv_dir = './output/adv/{}/{}/{}/{}/{}/'.format(args.data_path, args.mode, args.model, args.attacks,target_class)
     # else:
-    adv_dir = './output/adv/{}/{}/{}/{}/m{}t{}/'.format(args.data_path, args.mode, args.model, args.attacks, args.mask_type,
-                                                        target_class)
+    adv_dir = './output/adv/{}/{}/{}/{}/{}/m{}t{}/'.format(args.data_path, args.mode, args.model, args.attacks, args.data_type,
+                                                        args.mask_type,target_class)
     print('adv dir', adv_dir)
     if not os.path.exists(adv_dir):
         os.makedirs(adv_dir)
@@ -122,42 +127,49 @@ def Attack(model, test_loader, args):
         label_oh = make_one_hot(label, n_classes, device)
         swapped = True
         print(args.attacks)
-        if 'DAG' in args.attacks or 'spt' in args.attacks or 'square' in args.attacks:
-            target_class = int(target_class)
-            if args.mask_type == '1':
-                print('dagA')
-                adv_target = torch.zeros_like(label)
-                adv_target = make_one_hot(adv_target, n_classes, device)
-                print("target ", adv_target.shape, label.shape)
+        if 'dag' in args.attacks:
+            if 'DAG' in args.data_type or 'square' in args.data_type:
+                target_class = int(target_class)
+                if args.mask_type == '1':
+                    print('dagA')
+                    adv_target = torch.zeros_like(label)
+                    adv_target = make_one_hot(adv_target, n_classes, device)
+                    print("target ", adv_target.shape, label.shape)
 
-            elif args.mask_type == '2':
-                print('dagB')
-                adv_target,swapped = generate_target_swap(label_oh.cpu().numpy())
-                adv_target=torch.from_numpy(adv_target).float().to(device)
-                adv_target=make_one_hot(adv_target, n_classes, device)
+                elif args.mask_type == '2':
+                    print('dagB')
+                    adv_target,swapped = generate_target_swap(label_oh.cpu().numpy())
+                    adv_target=torch.from_numpy(adv_target).float().to(device)
+                    adv_target=make_one_hot(adv_target, n_classes, device)
 
-            elif args.mask_type == '3':
-                print('dagC')
-                # choice one randome particular class except background class(0)
-                # unique_label = torch.unique(label)
-                # target_class = int(random.choice(unique_label[1:]).item())
-                # target_class = 2
-                adv_target = generate_target_bs(batch_idx, label, target_class=target_class)
-                # adv_target=generate_target(batch_idx, label_oh.cpu().numpy(), target_class = target_class)
-                # print('checkout', np.all(adv_target==label_oh.cpu().numpy()))
-                adv_target=make_one_hot(adv_target, n_classes, device)
-            elif args.mask_type == '4':
-                print('dagD')
-                # choice one randome particular class except background class(0)
-                # unique_label = torch.unique(label)
-                # target_class = int(random.choice(unique_label[1:]).item())
-                # target_class = 2
-                adv_target = generate_target_swap_cls(batch_idx, label, target_class=target_class)
-                # adv_target=generate_target(batch_idx, label_oh.cpu().numpy(), target_class = target_class)
-                # print('checkout', np.all(adv_target==label_oh.cpu().numpy()))
-                adv_target = make_one_hot(adv_target, n_classes, device)
-        elif ('ifgsm' in args.attacks) or ('pgd' in args.attacks)  or ('cw' in args.attacks):
-            print('ifgsm,pgd')
+                elif args.mask_type == '3':
+                    print('dagC')
+                    # choice one randome particular class except background class(0)
+                    # unique_label = torch.unique(label)
+                    # target_class = int(random.choice(unique_label[1:]).item())
+                    # target_class = 2
+                    adv_target = generate_target_bs(batch_idx, label, target_class=target_class)
+                    # adv_target=generate_target(batch_idx, label_oh.cpu().numpy(), target_class = target_class)
+                    # print('checkout', np.all(adv_target==label_oh.cpu().numpy()))
+                    adv_target=make_one_hot(adv_target, n_classes, device)
+                elif args.mask_type == '4':
+                    print('dagD')
+                    # choice one randome particular class except background class(0)
+                    # unique_label = torch.unique(label)
+                    # target_class = int(random.choice(unique_label[1:]).item())
+                    # target_class = 2
+                    adv_target = generate_target_swap_cls(batch_idx, label, target_class=target_class)
+                    # adv_target=generate_target(batch_idx, label_oh.cpu().numpy(), target_class = target_class)
+                    # print('checkout', np.all(adv_target==label_oh.cpu().numpy()))
+                    print("tar", adv_target.mean())
+                    adv_target = make_one_hot(adv_target, n_classes, device)
+                elif args.mask_type == '5':
+                    print('dagE')
+                    adv_target,swapped = generate_target_swap_rd(label_oh.cpu().numpy())
+                    adv_target=torch.from_numpy(adv_target).float().to(device)
+                    # print('adv target', adv_target.shape)
+        elif ('ifgsm' in args.attacks) or ('pgd' in args.attacks):
+            print('ifgsm, pgd')
             # adv_target = torch.zeros_like(label)
             if args.mask_type=='1':
                 # adv_target = torch.zeros_like(label_oh)
@@ -224,50 +236,41 @@ def Attack(model, test_loader, args):
 
             if len(image_iteration) > 0:
                 out_img = image_iteration * 255
-                out_img = np.moveaxis(out_img, 1, -1)
+                if args.channels==1:
+                    out_img = np.squeeze(out_img,1)
+                else:
+                    out_img = np.moveaxis(out_img, 1, -1)
                 for k, im in enumerate(out_img):
                     ind = batch_idx * batch_size + k
                     # print('img', ind, image_iteration.shape, out_img.dtype)
                     cv2.imwrite(os.path.join(adv_dir, '{}.png'.format(ind)), im)
                     adv_imgs.append(im)
-        elif 'DAG' in args.attacks:
-            if swapped:
-                image_iteration=DAG(args,None, model=model,
-                          image=image,
-                          ground_truth=label,
-                          oh_label=label_oh,
-                          adv_target=adv_target,
-                          num_iterations=num_iterations,
-                          gamma=gamma,
-                          no_background=False,
-                          background_class=0,
-                          device=device,
-                          verbose=False)
+        elif 'DAG' in args.data_type:
+            image_iteration=DAG(args,None, model=model,
+                      image=image,
+                      ground_truth=label,
+                      oh_label=label_oh,
+                      adv_target=adv_target,
+                      num_iterations=num_iterations,
+                      gamma=gamma,
+                      no_background=False,
+                      background_class=0,
+                      device=device,
+                      verbose=False)
 
-                out_img1 = image_iteration * 255
-                print("ou", out_img1.size())
-                if args.channels !=1:
-                    out_img = torch.movedim(out_img1, 1, -1)
-                else:
-                    out_img = out_img1.squeeze(1)
-                out_np_img = np.uint8(out_img.detach().cpu().numpy())
-                # print('out', out_img[0].size())
-                for k, im in enumerate(out_np_img):
-                    ind = batch_idx * batch_size + k
-                    # print('img', ind, im.shape, out_np_img.dtype)
-                    cv2.imwrite(os.path.join(adv_dir, '{}.png'.format(ind)), im)
-                    # adv_imgs.append(out_img1[k])
-        elif 'spt' in args.attacks:
-            pert_img = attack(image, adv_target, model, device)
-            out_img = pert_img * 255
-            # print('out', len(out_img), out_img[0].shape)
-            for k, im in enumerate(out_img):
-                im = im.data.cpu().numpy()
-                im = np.moveaxis(im, 0, -1)
+            out_img1 = image_iteration * 255
+            print("ou", out_img1.size())
+            if args.channels !=1:
+                out_img = torch.movedim(out_img1, 1, -1)
+            else:
+                out_img = out_img1.squeeze(1)
+            out_np_img = np.uint8(out_img.detach().cpu().numpy())
+            # print('out', out_img[0].size())
+            for k, im in enumerate(out_np_img):
                 ind = batch_idx * batch_size + k
-                print('img', ind, pert_img.shape)
+                # print('img', ind, im.shape, out_np_img.dtype)
                 cv2.imwrite(os.path.join(adv_dir, '{}.png'.format(ind)), im)
-                adv_imgs.append(im)
+                # adv_imgs.append(out_img1[k])
         elif 'square' in args.attacks:
             # print('adv ta', adv_target.shape, image.shape)
             # square_attack = square_attack_linf if args.attack == 'square_linf' else square_attack_l2
@@ -316,6 +319,7 @@ if __name__ == "__main__":
     
     n_channels = args.channels
     n_classes = args.classes
+    device = torch.device(args.device)
     
     test_dataset, test_loader = load_data(args)
 
@@ -331,7 +335,7 @@ if __name__ == "__main__":
         model = DenseNet(in_channels = n_channels, n_classes = n_classes)
 
     elif args.model == 'AgNet':
-        model = AG_Net(n_classes=n_classes, bn=args.GroupNorm, BatchNorm=args.BatchNorm)
+        model = AG_Net(n_classes=n_classes,n_channels=args.channels, bn=args.GroupNorm, BatchNorm=args.BatchNorm)
         # model = get_model('AG_Net')
         # model = model(n_classes=n_classes, bn=args.GroupNorm, BatchNorm=args.BatchNorm)
         model = model.double()
@@ -348,6 +352,6 @@ if __name__ == "__main__":
 
     model_path = os.path.join(args.model_path,args.data_path,args.model+'.pth')
     print('Load model', model_path)
-    model.load_state_dict(torch.load(model_path))
+    model.load_state_dict(torch.load(model_path, map_location=device))
 
-    Attack(model, test_loader, args)
+    Attack(model, test_loader, device, args)

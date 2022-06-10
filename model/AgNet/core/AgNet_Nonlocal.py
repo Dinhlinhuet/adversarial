@@ -7,19 +7,20 @@ from model.AgNet.core.blocks import M_Conv
 
 from model.AgNet.core.blocks import M_Decoder_my_10
 from model.AgNet.guided_filter_pytorch.guided_filter_attention import FastGuidedFilter_attention
+from model.feature_denoising.non_local_gaussian import NONLocalBlock2D
 
 
-class AG_Net(nn.Module):
-    def __init__(self, denoise, n_classes, bn=True, BatchNorm=False):
-        super(AG_Net, self).__init__()
+class AG_NetNonlocal(nn.Module):
+    def __init__(self,n_classes, n_channels, bn=True, BatchNorm=False):
+        super(AG_NetNonlocal, self).__init__()
 
         # mutli-scale simple convolution
-        self.conv2 = M_Conv(3, 64, kernel_size=3, bn=bn, BatchNorm=BatchNorm)
-        self.conv3 = M_Conv(3, 128, kernel_size=3, bn=bn, BatchNorm=BatchNorm)
-        self.conv4 = M_Conv(3, 256, kernel_size=3, bn=bn, BatchNorm=BatchNorm)
+        self.conv2 = M_Conv(n_channels, 64, kernel_size=3, bn=bn, BatchNorm=BatchNorm)
+        self.conv3 = M_Conv(n_channels, 128, kernel_size=3, bn=bn, BatchNorm=BatchNorm)
+        self.conv4 = M_Conv(n_channels, 256, kernel_size=3, bn=bn, BatchNorm=BatchNorm)
 
         # the down convolution contain concat operation
-        self.down1 = M_Encoder(3, 32, kernel_size=3, bn=bn, BatchNorm=BatchNorm)  # 512
+        self.down1 = M_Encoder(n_channels, 32, kernel_size=3, bn=bn, BatchNorm=BatchNorm)  # 512
         self.down2 = M_Encoder(64 + 32, 64, kernel_size=3, bn=bn, BatchNorm=BatchNorm)  # 256
         self.down3 = M_Encoder(128 + 64, 128, kernel_size=3, bn=bn, BatchNorm=BatchNorm)  # 128
         self.down4 = M_Encoder(256 + 128, 256, kernel_size=3, bn=bn, BatchNorm=BatchNorm)  # 64
@@ -46,13 +47,8 @@ class AG_Net(nn.Module):
         self.attentionblock6 = GridAttentionBlock(in_channels=256)
         self.attentionblock7 = GridAttentionBlock(in_channels=128)
         self.attentionblock8 = GridAttentionBlock(in_channels=64)
-        self.denoise = denoise
 
-    def forward(self, x, defense=False):
-        output = []
-        if defense:
-            x = self.denoise(x)
-            output.append(x)
+    def forward(self, x):
         _, _, img_shape, _ = x.size()
         x_2 = F.upsample(x, size=(int(img_shape / 2), int(img_shape / 2)), mode='bilinear')
         x_3 = F.upsample(x, size=(int(img_shape / 4), int(img_shape / 4)), mode='bilinear')
@@ -102,9 +98,6 @@ class AG_Net(nn.Module):
 
         ave_out = (side_5+side_6+side_7+side_8)/4
         out = [ave_out, side_5, side_6, side_7, side_8]
-        if defense:
-            output.append(out)
-            return output
         return out
 
 

@@ -105,6 +105,44 @@
 #python tools/test_deeplab.py --output_stride 16 --channels 3 --classes 3 --data_path fundus --output_path \
 #./output/test/ --model deeplabv3plus_resnet101 --adv_model deeplabv3plus_resnet101 \
 #--attacks ifgsm --target 1 --mask_type 1 --batch_size 2
-python tools/test_deeplab.py --output_stride 16 --channels 3 --classes 3 --data_path fundus --output_path \
-./output/test/ --model deeplabv3plus_resnet101 --adv_model deeplabv3plus_resnet101 \
---attacks spt --target 0 --mask_type 2 --batch_size 4
+#python tools/test_deeplab.py --output_stride 16 --channels 3 --classes 3 --data_path fundus --output_path \
+#./output/test/ --model deeplabv3plus_resnet101 --adv_model deeplabv3plus_resnet101 \
+#--attacks spt --target 0 --mask_type 2 --batch_size 4
+
+
+
+#python tools/test.py --model SegNet --channels 1 --classes 2 --output_path ./output/test/ --mode test --data_path lung
+#python tools/test_ag.py --model AgNet --channels 1 --classes 2 --output_path ./output/test/ --mode test --data_path lung\
+# --data_type org --batch_size 4
+#python tools/test.py --model UNet --channels 1 --classes 2  --output_path ./output/test/ --mode test --data_path lung \
+#--device 1
+#python tools/test.py --model DenseNet --channels 1 --classes 2  --output_path ./output/test/ --mode test --data_path lung
+#python tools/test_deeplab.py --output_stride 16 --channels 1 --classes 2 --data_path lung --output_path \
+#./output/test/ --model deeplabv3plus_resnet101 --adv_model deeplabv3plus_resnet101 \
+#--batch_size 4
+
+
+##python tools/test.py --model UNet --channels 1 --classes 2 --model_path ./checkpoints/ --output_path \
+##./output/test/ --mode test --data_type DAG_A --adv_model UNet --mask_type 1 --data_path lung --attacks dag
+#python tools/test.py --model UNet --channels 1 --classes 2 --model_path ./checkpoints/ --output_path \
+#./output/test/ --mode test --data_type DAG_D --adv_model UNet --mask_type 4 --target 0 --data_path lung --attacks dag \
+#--device 1
+
+python tools/test_ag.py --model AgNet --channels 1 --classes 2 --model_path ./checkpoints/ --output_path \
+./output/test/ --mode test --data_type DAG_A --adv_model AgNet --mask_type 1 --data_path lung --attacks dag --device 1
+python tools/test_ag.py --model AgNet --channels 1 --classes 2 --model_path ./checkpoints/ --output_path \
+./output/test/ --mode test --data_type DAG_D --adv_model AgNet --mask_type 4 --target 0 --data_path lung --attacks dag \
+--device 1 --batch_size 4
+
+##python tools/test.py --model DenseNet --channels 1 --classes 2 --model_path ./checkpoints/ --output_path \
+##./output/test/ --mode test --data_type DAG_A --adv_model DenseNet --mask_type 1 --data_path lung --attacks dag
+#python tools/test.py --model DenseNet --channels 1 --classes 2 --model_path ./checkpoints/ --output_path \
+#./output/test/ --mode test --data_type DAG_D --adv_model DenseNet --mask_type 4 --target 0 --data_path lung --attacks dag \
+#--device 1
+
+##python tools/test_deeplab.py --model deeplabv3plus_resnet101 --channels 1 --classes 2 --output_path \
+##./output/test/ --mode test --data_type DAG_A --adv_model deeplabv3plus_resnet101 --mask_type 1 --data_path lung \
+##--attacks dag
+#python tools/test_deeplab.py --model deeplabv3plus_resnet101 --channels 1 --classes 2  --output_path \
+#./output/test/ --mode test --data_type DAG_D --adv_model deeplabv3plus_resnet101 --mask_type 4 --target 0 --data_path lung \
+# --attacks dag --device 1

@@ -100,7 +100,7 @@ def calculate_Accuracy(confusion):
 
 
 def get_model(model_name):
-    if model_name=='AG_Net':
+    if model_name=='Ag_Net':
         return AG_Net
 
 

@@ -322,8 +322,8 @@ class SegmentDataset(SampleDataset):
         return images, labels
 
 # normal
-    def __init__(self, root_dir, num_class, channels, mode='train', gen_mode=None, model=None, type=None,
-                target_class=None, data_type='org', width=256, height=256, mask_type=0, suffix=''):
+    def __init__(self, root_dir, num_class, channels, mode='train', gen_mode=None, model=None, attack_type=None, data_type='org',
+                 mask_type=None, target_class=None, width=256, height=256, suffix=''):
         self.num_classes = num_class
         self.data_path = root_dir
         # train_img_dir = './data/{}/train/imgs/'.format(root_dir)
@@ -376,25 +376,25 @@ class SegmentDataset(SampleDataset):
                 #                                             mask_type)
                 # if target_class:
                 if self.data_path=='brain':
-                    npz_file = './data/{}/{}/{}_adv_{}_{}_m{}t{}.npz'.format(self.data_path,suffix, self.data_path, model, type,
+                    npz_file = './data/{}/{}/{}_adv_{}_{}_m{}t{}.npz'.format(self.data_path,suffix, self.data_path, model, attack_type,
                                                                          mask_type, target_class)
                 else:
-                    npz_file = './data/{}/{}/{}_adv_{}_m{}t{}.npz'.format(self.data_path, suffix, self.data_path,
-                                                                             type,
+                    npz_file = './data/{}/{}/{}_adv_{}_m{}t{}.npz'.format(self.data_path, attack_type, self.data_path,
+                                                                             data_type,
                                                                              mask_type, target_class)
                 # npz_file = './data/{}/{}_adv_{}_mix_label.npz'.format(self.data_path, self.data_path, type)
                 # npz_file = './data/{}/{}_adv_{}_pure_target.npz'.format(self.data_path, self.data_path, type)
                 # else:
                 #     npz_file = './data/{}/{}_adv_{}_{}.npz'.format(self.data_path,suffix, self.data_path, model, type
                 #                                                       )
-                if not os.path.exists('./data/{}/{}/'.format(self.data_path,suffix)):
-                    os.makedirs('./data/{}/{}/'.format(self.data_path,suffix))
+                if not os.path.exists('./data/{}/{}/'.format(self.data_path,attack_type)):
+                    os.makedirs('./data/{}/{}/'.format(self.data_path,attack_type))
                 npz_org_file = './data/{}/{}_test.npz'.format(self.data_path, self.data_path)
                 # self.img_dir = './output/adv/{}/{}/{}/'.format(self.data_path,model, type)
                 # if mask_type !='':
                 #     self.img_dir = './output/adv/{}/{}/{}/{}/m{}/'.format(self.data_path, mode, model, type, mask_type)
                 # else:
-                self.img_dir = './output/adv/{}/{}/{}/{}/m{}t{}/'.format(self.data_path, mode, model, type,
+                self.img_dir = './output/adv/{}/{}/{}/{}/{}/m{}t{}/'.format(self.data_path, mode, model, attack_type, data_type,
                                                                          mask_type, target_class)
                 # self.img_dir = './output/adv/{}/{}/{}/{}/mix_label/'.format(self.data_path, mode, model, type,
                 #                                                          mask_type, target_class)
@@ -466,8 +466,8 @@ class SegmentDataset(SampleDataset):
 
 class AgDataset(SampleDataset):
     # normal
-    def __init__(self, root_dir, num_class, channels, mode, model, type, target_class, data_type, width,
-                 height,mask_type, suffix):
+    def __init__(self, root_dir, num_class, channels, mode, model, attack_type, data_type, mask_type, target_class, width,
+                 height):
         super(SampleDataset, self).__init__()
         self.num_classes = num_class
         self.data_path = root_dir
@@ -508,7 +508,7 @@ class AgDataset(SampleDataset):
                 npz_file = './data/{}/{}_train.npz'.format(self.data_path, self.data_path)
             else:
                 npz_org_file = './data/{}/{}_train.npz'.format(self.data_path,self.data_path)
-                npz_file = './data/{}/denoiser/{}/{}_adv_train_{}_{}_m{}t{}.npz'.format(self.data_path, suffix, self.data_path,
+                npz_file = './data/{}/denoiser/{}/{}_adv_train_{}_{}_m{}t{}.npz'.format(self.data_path, attack_type, self.data_path,
                                                                                 model,
                                                                                 data_type,
                                                                                 mask_type, target_class)
@@ -523,10 +523,10 @@ class AgDataset(SampleDataset):
                 # npz_file = './data/{}/512/{}_test.npz'.format(self.data_path, self.data_path)
             else:
                 if self.data_path == 'brain':
-                    npz_file = './data/{}/{}/{}_adv_{}_{}_m{}t{}.npz'.format(self.data_path,suffix, self.data_path, model, data_type,
+                    npz_file = './data/{}/{}/{}_adv_{}_{}_m{}t{}.npz'.format(self.data_path,attack_type, self.data_path, model, data_type,
                                                                        mask_type, target_class)
                 else:
-                    npz_file = './data/{}/{}/{}_adv_{}_m{}t{}.npz'.format(self.data_path, suffix, self.data_path,
+                    npz_file = './data/{}/{}/{}_adv_{}_m{}t{}.npz'.format(self.data_path, attack_type, self.data_path,
                                                                               data_type,mask_type, target_class)
                 # npz_file = './data/{}/{}/{}_adv_{}_{}_{}_m{}t{}.npz'.format(self.data_path, suffix, self.data_path, model,
                 #                                                          type, data_type,
@@ -538,14 +538,14 @@ class AgDataset(SampleDataset):
                 # else:
                 #     npz_file = './data/{}/{}_adv_{}_{}.npz'.format(self.data_path,suffix, self.data_path, model, type
                 #                                                       )
-                if not os.path.exists('./data/{}/{}/'.format(self.data_path,suffix)):
-                    os.makedirs('./data/{}/{}/'.format(self.data_path,suffix))
+                if not os.path.exists('./data/{}/{}/'.format(self.data_path,attack_type)):
+                    os.makedirs('./data/{}/{}/'.format(self.data_path,attack_type))
                 npz_org_file = './data/{}/{}_test.npz'.format(self.data_path, self.data_path)
                 # self.img_dir = './output/adv/{}/{}/{}/'.format(self.data_path,model, type)
                 # if mask_type != '':
-                self.img_dir = './output/adv/{}/{}/{}/{}/m{}t{}/'.format(self.data_path, mode, model, data_type, mask_type, target_class)
-                # self.img_dir = './output/adv/{}/{}/{}/{}/{}/m{}t{}/'.format(self.data_path, mode, model, type, data_type, mask_type,
-                #                                                          target_class)
+                # self.img_dir = './output/adv/{}/{}/{}/{}/m{}t{}/'.format(self.data_path, mode, model, data_type, mask_type, target_class)
+                self.img_dir = './output/adv/{}/{}/{}/{}/{}/m{}t{}/'.format(self.data_path, mode, model, attack_type,\
+                    data_type, mask_type, target_class)
 
                 # else:
                 #     self.img_dir = './output/adv/{}/{}/{}/{}/'.format(self.data_path, model, type, target_class)

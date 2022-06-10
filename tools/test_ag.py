@@ -24,6 +24,9 @@ from model.AgNet.core.utils import get_model, dice_loss
 from opts import get_args
 from dataset.dataset import AgDataset
 from dataset.scale_att_dataset import AttackDataset
+from model.AgNet.core.models import AG_Net
+from dataset.lung_dataset import CovidAgDataset
+
 # --------------------------------------------------------------------------------
 
 # # --------------------------------------------------------------------------------
@@ -90,30 +93,35 @@ def fast_test(model, args, model_name):
     EPS = 1e-12
     model = model.double()
     model.eval()
-    # Background_IOU = []
-    # Vessel_IOU = []
-    # ACC = []
-    # SE = []
-    # SP = []
-    # AUC = []
+    print('data path', args.data_path, len(args.data_path), 'lung' in args.data_path)
     suffix = args.suffix
-    if args.attacks !='scl_attk':
+    if args.attacks == 'scl_attk':
+        test_dataset = AttackDataset(args.data_path, args.channels, args.mode, args.data_path)
+    elif 'lung' in args.data_path:
+        print('covid')
+        test_dataset = CovidAgDataset(args.data_path, args.classes, args.channels, mode='test', model=args.model,
+                                    attack_type=args.attacks, data_type=args.data_type, mask_type=args.mask_type, \
+                                    target_class=args.target, width=args.width, height=args.height)
+    else:
         test_dataset = AgDataset(args.data_path, args.classes, args.channels, args.mode, args.adv_model, args.attacks, args.target,
                                      args.data_type, args.width, args.height, args.mask_type, suffix)
-    else:
-        test_dataset = AttackDataset(args.data_path, args.channels, args.mode, args.data_path)
     test_loader = DataLoader(
         test_dataset,
         batch_size=args.batch_size,
         num_workers=4,
     )
-    args.output_path = os.path.join(args.output_path, args.data_path, args.model, args.mode, args.suffix)
-    # if args.mask_type != "":
-    # args.output_path = os.path.join(args.output_path, args.data_path, args.model, args.adv_model,
-    #                                 args.data_type, args.attacks, 'm' + args.mask_type+'t'+args.target, suffix)
-    # else:
-    #     args.output_path = os.path.join(args.output_path, args.data_path, args.model, args.adv_model,
-    #                                     args.data_type, args.attacks, args.target)
+    # args.output_path = os.path.join(args.output_path, args.data_path, args.model, args.mode,args.attacks, args.data_type,\
+    #                                 args.data_type, args.attacks)
+    if args.mask_type != "":
+        if args.attacks=='scl_attk':
+            args.output_path = os.path.join(args.output_path, args.data_path, args.model,
+                                            args.attacks, args.data_type, suffix)
+        else:
+            args.output_path = os.path.join(args.output_path, args.data_path, args.model, args.adv_model,
+                                        args.attacks, args.data_type, 'm' + args.mask_type+'t'+args.target, suffix)
+    else:
+        args.output_path = os.path.join(args.output_path, args.data_path, args.model, args.adv_model,
+                                        args.attacks, args.data_type)
     print('output path', args.output_path)
     if not os.path.exists(args.output_path):
         os.makedirs(args.output_path)
@@ -183,27 +191,13 @@ if __name__ == '__main__':
     # os.environ['CUDA_DEVICE_ORDER'] = "PCI_BUS_ID"
     # os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_avaiable
     gpu = args.gpus
-    device_ids = []
-    if gpu:
+    n_classes = args.classes
+    device = torch.device(0)
 
-        if not torch.cuda.is_available():
-            print("No cuda available")
-            raise SystemExit
-
-        device = torch.device(0)
-
-    else:
-        device = torch.device("cpu")
-
-    model_name = 'AG_Net'
-
-    model = get_model(model_name)
-    model = model(n_classes=args.classes, bn=args.GroupNorm, BatchNorm=args.BatchNorm)
+    model = AG_Net(n_classes=n_classes, n_channels=args.channels, bn=args.GroupNorm, BatchNorm=args.BatchNorm)
     model = model.to(device)
-
-    if args.gpus>1:
-        model.cuda()
-        # model_path = '../models/AG_Net.pth'
+    model_name = args.model
+    model.cuda()
     print('model', args.model_path, args.data_path, args.model)
     model_path = os.path.join(args.model_path, args.data_path, args.model+ '.pth')
     model.load_state_dict(torch.load(model_path))

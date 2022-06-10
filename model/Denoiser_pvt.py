@@ -5,19 +5,13 @@ import numpy as np
 import os
 from functools import partial
 
-from model.UNet_Denoiser import UNet
-from model.SegNet_Denoiser import SegNet
-from model.AgNet.core.AgNet_Denoiser import AG_Net
-from loss import onehot2norm, dice_loss
 from model.pvt_v2 import PyramidVisionTransformerEncoder
-from model.pvt_v2_decoder import PyramidVisionTransformerDecoder, Block
+# from model.pvt_v2_decoder import PyramidVisionTransformerDecoder, Block
+from model.pvt_v2_decoder1 import PyramidVisionTransformerDecoder, Block
 from model.DenoiseModules import BasicUformerLayer
 
 
-# from pytorch_msssim import SSIM,ssim
-# ssim_module = SSIM(data_range=255, size_average=True, channel=3)
 def get_net(input_size, channels, model_path):
-    # input_size = [299, 299]
     input_size = input_size
     denoiser = Denoise(input_size, in_chans=channels, out_chans=channels)
 
@@ -121,12 +115,22 @@ class Denoise(nn.Module):
                 dim=512, num_heads=8, mlp_ratio=4, qkv_bias=True,
                 drop=0., attn_drop=attn_drop_rate, drop_path=0.1, norm_layer=partial(nn.LayerNorm, eps=1e-6),
                 sr_ratio=4, linear=False)
+        #for concat
         self.decoder = PyramidVisionTransformerDecoder(img_size=img_size, out_chans= out_chans,
                                                        embed_dims=[1024, 512, 320, 128],
                                                        out_dims=[256, 160, 64, out_chans],
                                                        num_heads=[8, 4, 2, 1], mlp_ratios=[4, 4, 8, 8], qkv_bias=True,
                                                        norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 6, 4, 3],
                                                        sr_ratios=[1, 2, 4, 8], num_mid=self.num_mid)
+        #for plus
+        # self.decoder = PyramidVisionTransformerDecoder(img_size=img_size, out_chans=out_chans,
+        #                                                embed_dims=[512, 256, 160, 64],
+        #                                                out_dims=[256, 160, 64, out_chans],
+        #                                                num_heads=[8, 4, 2, 1], mlp_ratios=[4, 4, 8, 8], qkv_bias=True,
+        #                                                norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 6, 4, 3],
+        #                                                sr_ratios=[1, 2, 4, 8], num_mid=self.num_mid)
+        # token_projection = 'conv'
+        # token_projection = 'linear_concat'
         mid_dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]
         self.middle_blocks = nn.ModuleList([
             BasicUformerLayer(dim=embed_dim[i],
@@ -166,61 +170,3 @@ class Denoise(nn.Module):
         out = x+out
         # out = x - out
         return out
-
-class Net(nn.Module):
-    def __init__(self, input_size, channels, num_class, n, hard_mining=0, loss_norm=False):
-        super(Net, self).__init__()
-        # print('inut', input_size)
-        self.denoise = Denoise(img_size=input_size)
-        self.net = UNet(self.denoise, channels, num_class)
-        self.loss = Loss(n, hard_mining, loss_norm)
-
-    def forward(self, device, orig_x, adv_x=None, train=True, defense=False):
-        # print('defen', defense)
-        # denoised_imgs, orig_outputs = self.net(orig_x,defense=False)
-        if defense:
-            # denoised_imgs, orig_outputs_ = self.net(orig_x, defense)
-            denoised_imgs, orig_outputs_ = self.net(orig_x, defense)
-        else:
-            orig_outputs_ = self.net(orig_x, defense)
-        orig_outputs = F.softmax(orig_outputs_, dim=1)
-        # orig_outputs = onehot2norm(orig_outputs, device)
-        # if requires_control:
-        #     control_outputs = self.net(adv_x)
-        #     control_loss = self.loss(control_outputs, orig_outputs)
-
-        # if train:
-        #     adv_x.volatile = False
-        #     for i in range(len(orig_outputs)):
-        #         orig_outputs[i].volatile = False
-        # print('ori', torch.min(orig_outputs), torch.max(orig_outputs))
-        if train:
-            adv_denoised, adv_outputs_ = self.net(adv_x, defense=True)
-            adv_outputs = F.softmax(adv_outputs_, dim=1)
-            # adv_outputs = onehot2norm(adv_outputs, device)
-            # print('adv', adv_outputs.size(), torch.min(adv_outputs), torch.max(adv_outputs))
-            # adv_outputs = self.net(adv_x, defense=False)
-            # adv_denoised = svd_rgb(adv_denoised, 150, 150, 150)
-            # ssim_module = SSIM(data_range=255, size_average=True, channel=3)
-            # ssim_loss = ssim_module(orig_x,adv_x)
-            # ssim_loss = ssim(orig_x, adv_denoised, data_range=1, size_average=True)
-            # print('ssd', ssim_loss)
-            loss = self.loss(adv_outputs, orig_outputs)
-            # loss = dice_loss(orig_outputs_, adv_outputs)
-            # loss.requires_grad=True
-            # loss = Variable(loss.data, requires_grad=True)
-            # print('orig_outputs', orig_outputs[0].size())
-            # if not requires_control:
-            return orig_outputs_, adv_outputs_, loss
-        else:
-            if defense:
-                return orig_outputs_, denoised_imgs
-            else:
-                return orig_outputs_
-            # return orig_outputs
-        # else:
-        #     return orig_outputs[-1], adv_outputs[-1], loss, control_outputs[-1], control_loss
-        # if not requires_control:
-        #     return orig_outputs[0], adv_outputs[0], loss
-        # else:
-        #     return orig_outputs[0], adv_outputs[0], loss, control_outputs[0], control_loss

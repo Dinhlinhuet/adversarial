@@ -143,7 +143,7 @@ class Denoise(nn.Module):
         self.back = nn.ModuleList(back)
 
         self.final = nn.Conv2d(back_out[0] * expansion, fwd_in, kernel_size=1, bias=False)
-        n = 2
+        n = 1
         print('L{} loss'.format(n))
         hard_mining = 0
         loss_norm = False

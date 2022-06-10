@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from model.feature_denoising.non_local_gaussian import NONLocalBlock2D
 
 BN_EPS = 1e-4  #1e-4  #1e-5
 
@@ -43,7 +44,7 @@ class StackEncoder (nn.Module):
         return y, y_small
 
 
-class StackDecoder (nn.Module):
+class StackDecoder(nn.Module):
     def __init__(self, x_big_channels, x_channels, y_channels, kernel_size=3, dilation=1, bn=False, BatchNorm=False, num_groups=32):
         super(StackDecoder, self).__init__()
         padding=(dilation*kernel_size-1)//2
@@ -60,7 +61,7 @@ class StackDecoder (nn.Module):
         #y = F.upsample(x, scale_factor=2,mode='bilinear')
         y = torch.cat([y,x_big],1)
         y = self.decode(y)
-        return  y
+        return y
 
 
 class M_Encoder(nn.Module):
@@ -72,6 +73,7 @@ class M_Encoder(nn.Module):
             ConvBnRelu2d(output_channels, output_channels, kernel_size=kernel_size, padding=padding, dilation=dilation, stride=1, groups=1, is_bn=bn,BatchNorm=BatchNorm, num_groups=num_groups),
         )
         self.pooling = pooling
+
 
     def forward(self, x):
         conv = self.encode(x)
@@ -90,9 +92,11 @@ class M_Conv(nn.Module):
             nn.Conv2d(input_channels, output_channels,kernel_size=kernel_size, padding=1, stride=1),
             nn.ReLU(inplace=True),
         )
+        # self.non_local = NONLocalBlock2D(in_channels=output_channels, sub_sample=False)
 
     def forward(self, x):
         conv = self.encode(x)
+        # conv = self.non_local(conv)
         return conv
 
 

@@ -56,10 +56,16 @@ class GanDataset(Dataset):
             # print('checklabel', np.unique(self.labels[0]))
         self.images = self.images.astype(np.float32)
         self.labels = np.expand_dims(self.labels,1)
-        self.torch_transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
-        ])
+        if channels==3:
+            self.torch_transform = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
+            ])
+        else:
+            self.torch_transform = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize(mean=(0.5), std=(0.5))
+            ])
 
     def read_files(self, img_dir, label_dir, out_img_dir, out_label_dir, channels, width, height):
         images=[]

@@ -76,9 +76,7 @@ def get_args():
     (options, args) = parser.parse_args()
     return options
 
-def train_net(model, denoiser, args):
-    # rank = args.nr * args.gpus + gpu
-    # dist.init_process_group(backend='nccl', init_method='env://', world_size=args.world_size, rank=rank)
+def train_net(model, denoiser, denoiser_path, args):
     data_path = args.data_path
     num_epochs = args.epochs
     n_classes = args.classes
@@ -86,11 +84,6 @@ def train_net(model, denoiser, args):
     # data_height = args.height
             
     device = torch.device(args.device)
-    
-    # if len(device_ids) > 1:
-    #     print('parallel')
-    #     # model = nn.DataParallel(model, device_ids = device_ids)
-    #     denoiser = nn.DataParallel(denoiser, device_ids=device_ids)
 
     if isinstance(denoiser, DataParallel):
         print('parallely')
@@ -99,18 +92,13 @@ def train_net(model, denoiser, args):
         params = denoiser.parameters()
     # torch.cuda.set_device(gpu)
     # denoiser.cuda(gpu)
-    # denoiser = nn.parallel.DistributedDataParallel(denoiser, device_ids=[gpu])
     # pytorch_total_params = sum(p.numel() for p in c_params)
     # print('total denoiser params', pytorch_total_params)
     optimizer = torch.optim.Adam(params, lr=args.lr, weight_decay=0.1)
     model = model.to(device)
-    # model.cuda(gpu)
     denoiser = denoiser.to(device)
     for param in model.parameters():
         param.requires_grad = False
-    # ssim_module = pytorch_ssim.SSIM(window_size=11)
-    # ssim_module = SSIM(data_range=1, size_average=True, channel=3)
-    # ssim_module = ssim_module.to(device)
     # loss = loss.to(device)
 
     # set image into training and validation dataset
@@ -119,7 +107,7 @@ def train_net(model, denoiser, args):
 
     train_dataset = DefenseSclDataset(data_path, 'train', args.channels)
 
-    if 'fundus' in args.data_path:
+    if any(data_name in args.data_path for data_name in ['fundus', 'lung']):
         # val_dataset = DefenseDataset(data_path, 'val', args.channels)
         val_dataset = DefenseSclDataset(data_path, 'val', args.channels)
         train_sampler = SubsetRandomSampler(np.arange(len(train_dataset)))
@@ -158,36 +146,15 @@ def train_net(model, denoiser, args):
             sampler=val_sampler
         )
     start_epoch = args.start_epoch
-    save_dir = args.save_dir
+
     if args.resume:
         checkpoint = torch.load(args.resume)
-        save_dir = args.save_dir
         model.load_state_dict(checkpoint)
     else:
         print('not resume')
         # if start_epoch == 0:
         #     start_epoch = 1
-        if not save_dir:
-            exp_id = time.strftime('%Y%m%d-%H%M%S', time.localtime())
-            save_dir = os.path.join(args.save_dir, exp_id)
-        else:
-            save_dir = args.save_dir
-    print('save dir', save_dir)
     # model_folder = os.path.abspath('./checkpoints/{}/'.format(args.data_path))
-    denoiser_folder = os.path.abspath('./{}/{}/'.format(save_dir,args.data_path))
-    if not os.path.exists(denoiser_folder):
-        os.makedirs(denoiser_folder)
-    
-    # if args.model == 'UNet':
-    #     denoiser_path = os.path.join(denoiser_folder, 'UNet.pth')
-    #
-    # elif args.model == 'SegNet':
-    #     denoiser_path = os.path.join(denoiser_folder, 'SegNet.pth')
-    #
-    # elif args.model == 'DenseNet':
-    denoiser_path = os.path.join(denoiser_folder,'{}_{}.pth'.format(args.model, args.suffix))
-    # denoiser_path = os.path.join(denoiser_folder, args.model + '_pgd.pth')
-    print('save path', denoiser_path)
     # set optimizer
 
     criterian = nn.MSELoss()
@@ -423,7 +390,14 @@ if __name__ == "__main__":
     elif args.model == 'DenseNet':
         model = DenseNet(in_channels=n_channels, n_classes=n_classes)
     model.load_state_dict(torch.load(args.target_model))
-    denoiser_path = os.path.join(args.save_dir, args.data_path, args.model+'.pth')
+    save_dir = args.save_dir
+    print('save dir', save_dir)
+    denoiser_folder = os.path.join('{}/{}/'.format(save_dir, args.data_path),'scl_attk')
+    if not os.path.exists(denoiser_folder):
+        os.makedirs(denoiser_folder)
+    denoiser_path = os.path.join(denoiser_folder, '{}_{}.pth'.format(args.model, args.suffix))
+    # denoiser_path = os.path.join(denoiser_folder, args.model + '_pgd.pth')
+    print('save path', denoiser_path)
     denoiser= get_net(args.height, args.channels, args.resume)
     # summary(model, input_size=(n_channels, args.height, args.width), device = 'cpu')
     # summary(denoiser, input_size=(n_channels, args.height, args.width), device='cpu')
@@ -433,4 +407,4 @@ if __name__ == "__main__":
     # os.environ['MASTER_PORT'] = '8888'
     # args.world_size = args.gpus * args.nodes
     # mp.spawn(train_net, nprocs=args.gpus, args=(model, denoiser, args,))
-    loss_history = train_net(model, denoiser, args)
+    loss_history = train_net(model, denoiser, denoiser_path, args)

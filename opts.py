@@ -24,7 +24,7 @@ def get_args():
     parser.add_argument('--model', dest='model', type=str,
                       help='model name(UNet, SegNet, DenseNet)')
     parser.add_argument('--attacks', dest='attacks', type=str, default="",
-                      help='attack types: DAG_A, DAG_B, DAG_C')
+                      help='attack types: dag')
     parser.add_argument('--target', dest='target', default='0', type=str,
                       help='target class')
     parser.add_argument('--mask_type', dest='mask_type', default="", type=str,

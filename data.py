@@ -13,7 +13,7 @@ def filename(x):
     return int(re.sub('[^0-9]','', x.split('.')[0]))
 
 class DefenseDataset(Dataset):
-    def __init__(self, data_path, phase, channels, data_type=''):
+    def __init__(self, data_path, phase, channels, attack_type=''):
         assert phase == 'train' or phase == 'val' or phase == 'test'
         self.phase = phase
         # self.dataset = dataset
@@ -28,50 +28,91 @@ class DefenseDataset(Dataset):
         #fundus
         adv_list = []
         # combine = [('DAG_A', 'm1t0'), ('DAG_B', 'm2t0'),('DAG_C', 'm3t1') ]
+
         combine = [('DAG_A', 'm1t0'), ('DAG_C', 'm3t1')]
+        if 'oct' in data_path:
+            models = ['SegNet', 'UNet', 'DenseNet']
+            if 'ifgsm' in attack_type:
+                combine = [('DAG_A', 'm1t0'), ('DAG_C', 'm3t1')]
+        if 'lung' in data_path:
+            models = ['AgNet', 'UNet', 'DenseNet', 'deeplabv3plus_resnet101']
+            if 'cw' in attack_type:
+                combine = [('DAG_A', 'm1t0')]
+            if 'dag' in attack_type:
+                combine = [('DAG_A', 'm1t0'), ('DAG_D', 'm4t0')]
+            if 'ifgsm' in attack_type:
+                combine = [('DAG_A', 'm1t0')]
         if not os.path.exists('./data/{}/denoiser/'.format(data_path)):
             os.mkdir('./data/{}/denoiser/'.format(data_path))
-        for comb in combine:
-            adv_images = []
-            adv_npz_file = './data/{}/denoiser/{}_adv_{}_{}_{}_{}.npz'.format(data_path, data_path, phase, 'UNet',
-                                                                              comb[0],comb[1])
-            adv_list.append(adv_npz_file)
-            if not os.path.exists(adv_npz_file):
-                print("not found", adv_npz_file)
-                #fundus
-                adv_dir = './output/adv/{}/{}/{}/{}/{}/{}/'.format(data_path, phase, 'UNet', data_type, comb[0],comb[1])
-                print('adv dir', adv_dir)
-                # adv_dir = './output/adv/{}/{}/{}/{}/{}/'.format(data_path, phase, 'UNet', 'pgd','1')
-                # brain
-                # adv_dir = './output/adv/{}/{}/{}/{}/{}/'.format(data_path, phase, 'UNet', 'pgd','1')
-                # adv_dir = './output/adv/{}/{}/{}/{}/{}/'.format(data_path, phase, 'UNet', 'DAG_A', '0')
-                # adv_dir = './output/adv/{}/{}/{}/{}/'.format(data_path, phase, 'SegNet', 'DAG_C')
-
-                ls_names = sorted(os.listdir(adv_dir), key=filename)
-                # print('lsname', ls_names)
-                for img_name in ls_names:
-                    if 'png' in img_name:
-                        img_path = os.path.join(adv_dir, img_name)
-                        # print('label', label_path)
-                        if channels == 1:
-                            img = cv2.imread(img_path, 0)
+        for model in models:
+            for comb in combine:
+                adv_images = []
+                # adv_npz_file = './data/{}/denoiser/{}_adv_{}_{}_{}_{}.npz'.format(data_path, data_path, phase, 'UNet',
+                #                                                                   comb[0],comb[1])
+                save_dir = './data/{}/denoiser/{}/'.format(data_path, attack_type)
+                if 'ifgsm' in attack_type:
+                    if 'lung' in data_path:
+                        adv_npz_file = '{}/{}_adv_{}_{}_{}.npz'.format(save_dir, data_path, phase, model,
+                                                                                   comb[1])
+                    else:
+                        adv_npz_file = '{}/{}_adv_{}_{}_{}_{}.npz'.format(save_dir, data_path, phase, model,
+                                                                          comb[0], comb[1])
+                else:
+                    adv_npz_file = '{}/{}_adv_{}_{}_{}_{}.npz'.format(save_dir, data_path, phase, model,
+                                                                      comb[0], comb[1])
+                if not os.path.exists(save_dir):
+                    os.makedirs(save_dir)
+                adv_list.append(adv_npz_file)
+                if not os.path.exists(adv_npz_file):
+                    print("not found", adv_npz_file)
+                    #fundus
+                    # adv_dir = './output/adv/{}/{}/{}/{}/{}/{}/'.format(data_path, phase, 'UNet', attack_type, comb[0],comb[1])
+                    if 'ifgsm' in attack_type:
+                        if 'lung' in data_path:
+                            adv_dir = './output/adv/{}/{}/{}/{}/{}/'.format(data_path, phase, model, attack_type,
+                                                                           comb[1])
                         else:
-                            img = cv2.imread(img_path)
-                        # img = cv2.resize(img,(256,256))/ 255
-                        img = img / 255
-                        adv_images.append(img)
-                        # print('checklabel', np.unique(data[i][1]))
-                np.savez_compressed(adv_npz_file, a=adv_images)
-            else:
-                print('load adv', adv_npz_file)
-                adv_data = np.load(adv_npz_file)
-                adv_images = adv_data['a']
-            print('len each set', len(adv_images))
-            self.adv_npz_list.append(adv_images)
+                            adv_dir = './output/adv/{}/{}/{}/{}/{}/{}/'.format(data_path, phase, model, attack_type,
+                                                                               comb[0],
+                                                                               comb[1])
+                    else:
+                        adv_dir = './output/adv/{}/{}/{}/{}/{}/{}/'.format(data_path, phase, model, attack_type,
+                                                                           comb[0],
+                                                                           comb[1])
+                    print('adv dir', adv_dir)
+                    # adv_dir = './output/adv/{}/{}/{}/{}/{}/'.format(data_path, phase, 'UNet', 'pgd','1')
+                    # brain
+                    # adv_dir = './output/adv/{}/{}/{}/{}/{}/'.format(data_path, phase, 'UNet', 'pgd','1')
+                    # adv_dir = './output/adv/{}/{}/{}/{}/{}/'.format(data_path, phase, 'UNet', 'DAG_A', '0')
+                    # adv_dir = './output/adv/{}/{}/{}/{}/'.format(data_path, phase, 'SegNet', 'DAG_C')
+
+                    ls_names = sorted(os.listdir(adv_dir), key=filename)
+                    # print('lsname', ls_names)
+                    for img_name in ls_names:
+                        if 'png' in img_name:
+                            img_path = os.path.join(adv_dir, img_name)
+                            # print('label', label_path)
+                            if channels == 1:
+                                img = cv2.imread(img_path, 0)
+                            else:
+                                img = cv2.imread(img_path)
+                            # img = cv2.resize(img,(256,256))/ 255
+                            img = img / 255
+                            adv_images.append(img)
+                            # print('checklabel', np.unique(data[i][1]))
+                    np.savez_compressed(adv_npz_file, a=adv_images)
+                else:
+                    print('load adv', adv_npz_file)
+                    adv_data = np.load(adv_npz_file)
+                    adv_images = adv_data['a']
+                print('len each set', len(adv_images))
+                self.adv_npz_list.append(adv_images)
         print('load clean', npz_file)
         data = np.load(npz_file)
         self.images = data['a']
         self.labels = data['b']
+        self.num_adv_type = len(self.adv_npz_list)-1
+        print("num adv type", self.num_adv_type)
 
 
     def __getitem__(self, index):
@@ -79,9 +120,9 @@ class DefenseDataset(Dataset):
         image = self.images[index]
         labels = self.labels[index]
 
-        num_adv_type = len(self.adv_npz_list)-1
-        i = rd.randint(0,num_adv_type)
+        i = rd.randint(0,self.num_adv_type)
         adv_file = self.adv_npz_list[i]
+        # print('adv file', len(adv_file))
         adv_image = adv_file[index]
         # adv_labels = self.adv_labels[index]
 
@@ -184,51 +225,56 @@ class DefenseSclDataset(Dataset):
         return len(self.images)
 
 class DefenseSclTestDataset(Dataset):
-    def __init__(self, data_path, phase, channels):
+    def __init__(self, data_path, phase, channels, data_type):
         assert phase == 'train' or phase == 'val' or phase == 'test'
         self.phase = phase
         # self.dataset = dataset
         # self.attack = attack
         self.data_path = data_path
         npz_file = './data/{}/{}_{}.npz'.format(data_path,data_path, phase)
-
-        # adv_npz_file = './data/{}/denoiser/scl_attk_{}_{}.npz'.format(data_path, data_path, phase)
-        adv_npz_file = './data/{}/scl_attk_{}_{}.npz'.format(data_path, data_path, phase)
-        adv_dir = './output/scale_attk/{}/{}/'.format(data_path, phase)
-        self.adv_images = []
-        if not os.path.exists(adv_npz_file):
-            print('not found', adv_npz_file)
-            def filename(x):
-                return int(re.sub('[^0-9]','', x.split('.')[0]))
-
-            ls_names = sorted(os.listdir(adv_dir), key=filename)
-            # print('lsname', ls_names)
-            for img_name in ls_names:
-                # print('img', img_name)
-                img_path = os.path.join(adv_dir, img_name)
-                # print('label', label_path)
-                if channels == 1:
-                    img = cv2.imread(img_path, 0)
-                else:
-                    img = cv2.imread(img_path)
-                # img = cv2.resize(img,(256,256))/ 255
-                img = img / 255
-                self.adv_images.append(img)
-            np.savez_compressed(adv_npz_file, a=self.adv_images)
-        else:
-            print('load adv', adv_npz_file)
-            adv_data = np.load(adv_npz_file)
-            self.adv_images = adv_data['a']
-        if os.path.exists(npz_file):
+        if data_type=='org':
             data = np.load(npz_file)
             print('load clean', npz_file)
+            self.adv_images = data['a']
             self.labels = data['b']
         else:
-            self.img_dir = './data/{}/{}/imgs/'.format(data_path, phase)
-            self.label_dir = './data/{}/{}/gt/'.format(data_path, phase)
-            self.images, self.labels = read_files(self.img_dir, self.label_dir, channels, resize=False)
-            np.savez_compressed(npz_file, a=self.images, b=self.labels)
-        print('len advset', len(self.adv_images))
+            # adv_npz_file = './data/{}/denoiser/scl_attk_{}_{}.npz'.format(data_path, data_path, phase)
+            adv_npz_file = './data/{}/scl_attk_{}_{}.npz'.format(data_path, data_path, phase)
+            adv_dir = './output/scale_attk/{}/{}/'.format(data_path, phase)
+            self.adv_images = []
+            if not os.path.exists(adv_npz_file):
+                print('not found', adv_npz_file)
+                def filename(x):
+                    return int(re.sub('[^0-9]','', x.split('.')[0]))
+
+                ls_names = sorted(os.listdir(adv_dir), key=filename)
+                # print('lsname', ls_names)
+                for img_name in ls_names:
+                    # print('img', img_name)
+                    img_path = os.path.join(adv_dir, img_name)
+                    # print('label', label_path)
+                    if channels == 1:
+                        img = cv2.imread(img_path, 0)
+                    else:
+                        img = cv2.imread(img_path)
+                    # img = cv2.resize(img,(256,256))/ 255
+                    img = img / 255
+                    self.adv_images.append(img)
+                np.savez_compressed(adv_npz_file, a=self.adv_images)
+            else:
+                print('load adv', adv_npz_file)
+                adv_data = np.load(adv_npz_file)
+                self.adv_images = adv_data['a']
+            if os.path.exists(npz_file):
+                data = np.load(npz_file)
+                print('load clean for label', npz_file)
+                self.labels = data['b']
+            else:
+                self.img_dir = './data/{}/{}/imgs/'.format(data_path, phase)
+                self.label_dir = './data/{}/{}/gt/'.format(data_path, phase)
+                self.images, self.labels = read_files(self.img_dir, self.label_dir, channels, resize=False)
+                np.savez_compressed(npz_file, a=self.images, b=self.labels)
+            print('len advset', len(self.adv_images))
 
 
     def __getitem__(self, index):

@@ -25,5 +25,19 @@
 #python tools/train_deeplab.py --model deeplabv3plus_mobilenet  --data_path brain --device 0 --lr 0.01 --batch_size 8\
 # --output_stride 8 --classes 2 --channels 3
 
-python tools/train_deeplab.py --model deeplabv3plus_resnet101  --data_path octafull --device 0 --lr 0.01 --batch_size 16\
- --output_stride 8 --classes 3 --channels 1
+#python tools/train_deeplab.py --model deeplabv3plus_resnet101  --data_path octafull --device 0 --lr 0.01 --batch_size 16\
+# --output_stride 8 --classes 3 --channels 1
+
+
+
+#python tools/train.py --model UNet --data_path lung --classes 2 --channels 1 --device 0
+
+#python tools/train.py --model SegNet --data_path lung --classes 2 --channels 1 --device 1 \
+#--resume ./checkpoints/lung/SegNet.pth
+
+#python tools/train.py --model DenseNet --data_path lung --classes 2 --channels 1 --device 0
+
+python tools/train_agnet.py --data_path lung --n_class 2 --channels 1 --device 1
+
+#python tools/train_deeplab.py --model deeplabv3plus_resnet101  --data_path lung --device 1 --lr 0.01 --batch_size 16\
+# --output_stride 8 --classes 2 --channels 1

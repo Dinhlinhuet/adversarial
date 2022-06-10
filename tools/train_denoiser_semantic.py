@@ -102,14 +102,10 @@ def train_net(model, denoiser, args):
     # set image into training and validation dataset
 
     # train_dataset = DefenseDataset(data_path, 'train', args.channels)
-    if 'oct' in data_path:
-        train_dataset = DefenseDataset(data_path, 'train', args.channels)
-    else:
-        train_dataset = DefenseSemanticDataset(data_path, 'train', args.channels, args.data_type)
-
-    if 'fundus' in args.data_path:
-        # val_dataset = DefenseDataset(data_path, 'val', args.channels)
-        val_dataset = DefenseSemanticDataset(data_path, 'val', args.channels, args.data_type)
+    if any(data_name in data_path for data_name in ['oct','lung']):
+        train_dataset = DefenseDataset(data_path, 'train', args.channels, args.data_type)
+    if 'lung' in args.data_path:
+        val_dataset = DefenseDataset(data_path, 'val', args.channels, args.data_type)
         train_sampler = SubsetRandomSampler(np.arange(len(train_dataset)))
         val_sampler = SubsetRandomSampler(np.arange(len(val_dataset)))
     else:
@@ -162,7 +158,7 @@ def train_net(model, denoiser, args):
             save_dir = args.save_dir
     print('save dir', save_dir)
     # model_folder = os.path.abspath('./checkpoints/{}/'.format(args.data_path))
-    denoiser_folder = os.path.abspath('./{}/{}/'.format(save_dir,args.data_path))
+    denoiser_folder = os.path.abspath('./{}/{}/{}/'.format(save_dir,args.data_path, args.data_type))
     if not os.path.exists(denoiser_folder):
         os.makedirs(denoiser_folder)
     
@@ -178,7 +174,8 @@ def train_net(model, denoiser, args):
     print('save path', denoiser_path)
     # set optimizer
 
-    criterian = nn.MSELoss()
+    # criterian = nn.MSELoss()
+    criterian = nn.L1Loss()
     # main train
     
     best_val_triplet_loss = 1e10
@@ -245,8 +242,8 @@ def train_net(model, denoiser, args):
             denoised_cln_output_ = F.softmax(denoised_cln_output, dim=1)
             # denoised_cln_output_ = denoised_cln_output_.to(device)
 
-            loss = criterian(clean_outputs_,denoised_cln_output_)+ criterian(clean_outputs_, denoised_adv_output_) #-\
-            # criterian(clean_outputs_, adv_outputs_)
+            loss = criterian(clean_outputs_,denoised_cln_output_)+ criterian(clean_outputs_, denoised_adv_output_) -\
+            criterian(clean_outputs_, adv_outputs_)
             # loss = criterian(clean_outputs_, denoised_adv_output_)
             loss.backward()
             optimizer.step()

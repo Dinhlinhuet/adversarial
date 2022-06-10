@@ -16,7 +16,7 @@ print(path.dirname(path.dirname(path.abspath(__file__))))
 from dataset.dataset import SampleDataset, AgDataset
 from skimage.measure import compare_ssim as ssim
 from pytorch_msssim import ms_ssim, ssim,  SSIM, MS_SSIM
-from attack.scaling_attack import scl_attack
+from attacks.scaling_attack import scl_attack
 from opts import get_args
 
 
@@ -25,7 +25,7 @@ def Attack(args):
     adversarial_examples = []
     org_img_dir = '{}/{}/{}/imgs/'.format(args.data_path,args.data_type, args.mode)
     print("org data", org_img_dir)
-    adv_dir = './output/scale_attck/{}/{}/'.format(args.data_type, args.mode)
+    adv_dir = './output/scale_attk/{}/{}/'.format(args.data_type, args.mode)
     print('adv dir', adv_dir)
     if not os.path.exists(adv_dir):
         os.makedirs(adv_dir)
@@ -75,11 +75,11 @@ def Attack1(args):
     adversarial_examples = []
     org_img_dir = '{}/{}/{}/imgs/'.format(args.data_path, args.data_type, args.mode)
     print("org data", org_img_dir)
-    adv_dir = './output/scale_attck/{}/{}/'.format(args.data_type, args.mode)
+    adv_dir = './output/scale_attk/{}/{}/'.format(args.data_type, args.mode)
     print('adv dir', adv_dir)
     if not os.path.exists(adv_dir):
         os.makedirs(adv_dir)
-    src_img = cv2.imread('./data/source_imgs/waterm.jpg')
+    src_img = cv2.imread('./scaleatt/data/source_imgs/waterm.jpg')
     npz_file = './{}/{}/{}_{}.npz'.format(args.data_path, args.data_type, args.data_type, args.mode)
     data = np.load(npz_file)['a']
     print('load ', npz_file)
@@ -89,17 +89,15 @@ def Attack1(args):
         print('img name', i)
         # print('img', image.max())
         image *= 255
+        image = np.uint8(image)
+        if len(image.shape)==2:
+            image = cv2.cvtColor(image,cv2.COLOR_GRAY2RGB)
+        # print('img', image.shape)
         # scaling_algorithm: SuppScalingAlgorithms = SuppScalingAlgorithms.NEAREST
         # scaling_library: SuppScalingLibraries = SuppScalingLibraries.CV
         att_img = scl_attack(src_image=src_img, tar_image=image)
         att_img.save(os.path.join(adv_dir, img_name))
         adv_imgs.append(att_img)
-        # if len(image_iteration) >= 1:
-        #
-        #     adversarial_examples.append([image_iteration[-1],
-        #                                  pure_label])
-        #
-        # del image_iteration
     # org_imgs = torch.cat(org_imgs, dim=0)
     # adv_imgs = torch.stack(adv_imgs, dim=0)
     # if 'DAG' in args.attacks:

@@ -94,7 +94,7 @@ class DefenseSemanticDataset(Dataset):
         return len(self.images)
 
 class DefenseSemanticTestDataset(Dataset):
-    def __init__(self, data_path, phase, channels):
+    def __init__(self, data_path,phase, channels, model, data_type, target_class,mask_type):
         assert phase == 'train' or phase == 'val' or phase == 'test'
         self.phase = phase
         # self.dataset = dataset
@@ -103,7 +103,13 @@ class DefenseSemanticTestDataset(Dataset):
         npz_file = './data/{}/{}_{}.npz'.format(data_path,data_path, phase)
 
         # adv_npz_file = './data/{}/denoiser/scl_attk_{}_{}.npz'.format(data_path, data_path, phase)
-        adv_npz_file = './data/{}/scl_attk_{}_{}.npz'.format(data_path, data_path, phase)
+        if data_path=='brain':
+            adv_npz_file = './data/{}/{}/{}_adv_{}_{}_m{}t{}.npz'.format(self.data_path, data_type, self.data_path, model,
+                                                                 data_type,
+                                                                 mask_type, target_class)
+        else:
+            adv_npz_file = './data/{}/{}/{}_adv_{}_m{}t{}.npz'.format(self.data_path, data_type, self.data_path,
+                                                                         data_type, mask_type, target_class)
         adv_dir = './output/scale_attk/{}/{}/'.format(data_path, phase)
         self.adv_images = []
         if not os.path.exists(adv_npz_file):

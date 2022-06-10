@@ -25,12 +25,12 @@ def generate_target_bs(idx, y_test, target_class=1, width=256, height=256):
     return y_target
 
 def generate_target_swap_cls(idx, y_test, target_class=1, width=256, height=256):
-    y_target = y_test
+    y_target = y_test.clone()
     # print('yt', y_target.size(), y_target[0].size())
     # print('tar', target_class)
     # print('ytarget bef', torch.sum(y_target), torch.unique(y_target))
-    y_target[y_target == target_class] = 1-target_class
-    y_target[y_target == 1-target_class] = target_class
+    y_target[y_test == target_class] = 1-target_class
+    y_target[y_test == 1-target_class] = target_class
     # print('ytarget af', torch.sum(y_target), torch.unique(y_target))
     # npimg = np.uint8((y_target * (255/2)).cpu().numpy())
     # print('ytg', npimg.shape)
@@ -124,59 +124,51 @@ def generate_target_swap(y_test):
     y_target = np.argmax(y_target, axis = 1)
     return y_target, swapped
 
-# def generate_target_swap(y_test):
-#
-#
-#     y_target = y_test
-#     # print('ytest', y_test.shape)
-#     y_target_arg = np.argmax(y_test, axis = 1)
-#     # print('arg', y_target_arg.shape)
-#     y_target_arg_no_back = np.where(y_target_arg>0)
-#
-#     y_target_arg = y_target_arg[y_target_arg_no_back]
-#
-#     classes  = np.unique(y_target_arg)
-#     # print("classes", classes)
-#     swapped= True
-#     # if len(classes) > 3:
-#     if len(classes) > 1:
-#         first_class = 0
-#
-#         second_class = 0
-#
-#         third_class = 0
-#
-#         while first_class == second_class == third_class:
-#         # while first_class == second_class:
-#             first_class = classes[randint(0, len(classes)-1)]
-#             f_ind = np.where(y_target_arg==first_class)
-#             # print(np.shape(f_ind))
-#
-#             second_class = classes[randint(0, len(classes)-1)]
-#             s_ind = np.where(y_target_arg == second_class)
-#
-#             third_class = classes[randint(0, len(classes) - 1)]
-#             t_ind = np.where(y_target_arg == third_class)
-#
-#             summ = np.shape(f_ind)[1] + np.shape(s_ind)[1] + np.shape(t_ind)[1]
-#             # summ = np.shape(f_ind)[1] + np.shape(s_ind)[1]
-#
-#             if summ < 1000:
-#                 first_class = 0
-#
-#                 second_class = 0
-#
-#                 third_class = 0
-#
-#         for i in range(256):
-#             for j in range(256):
-#                 temp = y_target[0,second_class, i,j]
-#                 y_target[0,second_class, i,j] = y_target[0,first_class,i,j]
-#                 y_target[0, first_class,i, j] = temp
-#
-#
-#     else:
-#         y_target = y_test
-#         swapped=False
-#         print('Not enough classes to swap!')
-#     return y_target, swapped
+def generate_target_swap_rd(y_test):
+
+    y_target = y_test
+    # print('ytest', y_test.shape)
+    y_target_arg = np.argmax(y_test, axis = 1)
+    # print('arg', y_target_arg.shape)
+
+    classes  = np.unique(y_target_arg)
+    # print("classes", classes)
+    swapped= True
+    # if len(classes) > 3:
+    if len(classes) > 1:
+        first_class = 0
+
+        second_class = 0
+
+
+        while first_class == second_class:
+        # while first_class == second_class:
+            first_class = classes[randint(0, len(classes)-1)]
+            f_ind = np.where(y_target_arg==first_class)
+            # print(np.shape(f_ind))
+
+            second_class = classes[randint(0, len(classes)-1)]
+            s_ind = np.where(y_target_arg == second_class)
+
+
+            summ = np.shape(f_ind)[1] + np.shape(s_ind)[1]
+            # summ = np.shape(f_ind)[1] + np.shape(s_ind)[1]
+
+            if summ < 1000:
+                first_class = 0
+
+                second_class = 0
+
+
+        for i in range(256):
+            for j in range(256):
+                temp = y_target[0,second_class, i,j]
+                y_target[0,second_class, i,j] = y_target[0,first_class,i,j]
+                y_target[0, first_class,i, j] = temp
+
+
+    else:
+        y_target = y_test
+        swapped=False
+        print('Not enough classes to swap!')
+    return y_target, swapped

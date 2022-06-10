@@ -59,8 +59,11 @@ class SampleDataset(Dataset):
                 # npz_file = './data/{}/512/{}_test.npz'.format(self.data_path, self.data_path)
             else:
                 if self.data_path != 'fundus':
-                    npz_file = './data/{}/{}/{}_adv_{}_{}_m{}t{}.npz'.format(self.data_path,suffix, self.data_path, model, data_type,
-                                                                       mask_type, target_class)
+                    # npz_file = './data/{}/{}/{}_adv_{}_{}_m{}t{}.npz'.format(self.data_path,suffix, self.data_path, model, data_type,
+                    #                                                    mask_type, target_class)
+                    npz_file = './data/{}/{}/{}_adv_{}_{}_m{}t{}.npz'.format(self.data_path, suffix, self.data_path, model,
+                                                                             type,
+                                                                             mask_type, target_class)
                 else:
                     npz_file = './data/{}/{}/{}_adv_{}_m{}t{}.npz'.format(self.data_path, suffix, self.data_path,
                                                                               data_type,mask_type, target_class)
@@ -80,7 +83,11 @@ class SampleDataset(Dataset):
                 # self.img_dir = './output/adv/{}/{}/{}/'.format(self.data_path,model, type)
                 # if mask_type != '':
                 # self.img_dir = './output/adv/{}/{}/{}/{}/m{}t{}/'.format(self.data_path, mode, model, type, mask_type, target_class)
-                self.img_dir = './output/adv/{}/{}/{}/{}/m{}t{}/'.format(self.data_path, mode, model, data_type, mask_type,
+                # self.img_dir = './output/adv/{}/{}/{}/{}/m{}t{}/'.format(self.data_path, mode, model, data_type, mask_type,
+                #                                                          target_class)
+                if self.data_path != 'fundus':
+                    self.img_dir = './output/adv/{}/{}/{}/{}/{}/m{}t{}/'.format(self.data_path, mode, model, type,data_type,
+                                                                         mask_type,
                                                                          target_class)
 
                 # else:

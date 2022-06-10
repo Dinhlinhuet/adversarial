@@ -20,6 +20,7 @@ print(path.dirname(path.dirname(path.abspath(__file__))))
 from model import deeplab
 import utils
 from dataset.dataset import SampleDataset, SegmentDataset
+from dataset.lung_dataset import CovidDataset
 from util import save_metrics, print_metrics
 from util import save_metrics, print_metrics, make_one_hot
 from loss import combined_loss, dice_score
@@ -151,10 +152,16 @@ def main():
             sampler=val_sampler
         )
     else:
-        train_dataset = SegmentDataset(data_path, n_classes, n_channels, mode= 'train', gen_mode=None,model=None,
-            type=None,target_class=None,data_type='org',width=args.width,height=args.height, mask_type=None, suffix=None)
-        val_dataset = SegmentDataset(data_path, n_classes, n_channels, mode= 'val', gen_mode=None,model=None,
-            type=None,target_class=None,data_type='org',width=args.width,height=args.height, mask_type=None, suffix=None)
+        if 'lung' in data_path:
+            train_dataset = CovidDataset(data_path, n_classes, n_channels, mode='train', model=None,
+                                         data_type='org', width=args.width, height=args.height)
+            val_dataset = CovidDataset(data_path, n_classes, n_channels, mode='val', model=None,
+                                       data_type='org', width=args.width, height=args.height)
+        else:
+            train_dataset = SegmentDataset(data_path, n_classes, n_channels, mode= 'train', gen_mode=None,model=None,
+                type=None,target_class=None,data_type='org',width=args.width,height=args.height, mask_type=None, suffix=None)
+            val_dataset = SegmentDataset(data_path, n_classes, n_channels, mode= 'val', gen_mode=None,model=None,
+                type=None,target_class=None,data_type='org',width=args.width,height=args.height, mask_type=None, suffix=None)
         train_sampler = SubsetRandomSampler(np.arange(len(train_dataset)))
         val_sampler = SubsetRandomSampler(np.arange(len(val_dataset)))
         train_loader = DataLoader(

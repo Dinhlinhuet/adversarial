@@ -311,7 +311,7 @@ class PyramidVisionTransformerDecoder(nn.Module):
             if i==0:
                 H, W = int(np.sqrt(x.shape[1])), int(np.sqrt(x.shape[1]))
             # print('outmd', out_mids[self.num_mid- i-1].shape)
-            # x += out_mids[self.num_mid- i]
+            # x -= out_mids[self.num_mid- i-1]
             x = torch.cat((out_mids[self.num_mid- i-1],x), dim=-1)
             # print('cat', x.shape)
             # print('HW', H, W)
@@ -397,78 +397,3 @@ def _conv_filter(state_dict, patch_size=16):
         out_dict[k] = v
 
     return out_dict
-
-
-@register_model
-def pvt_v2_b0(pretrained=False, **kwargs):
-    model = PyramidVisionTransformerDecoder(
-        patch_size=4, embed_dims=[32, 64, 160, 256], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4], qkv_bias=True,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[2, 2, 2, 2], sr_ratios=[8, 4, 2, 1],
-        **kwargs)
-    model.default_cfg = _cfg()
-
-    return model
-
-
-@register_model
-def pvt_v2_b1(pretrained=False, **kwargs):
-    model = PyramidVisionTransformerDecoder(
-        patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4], qkv_bias=True,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[2, 2, 2, 2], sr_ratios=[8, 4, 2, 1],
-        **kwargs)
-    model.default_cfg = _cfg()
-
-    return model
-
-
-@register_model
-def pvt_v2_b2(pretrained=False, **kwargs):
-    model = PyramidVisionTransformerDecoder(
-        patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4], qkv_bias=True,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 4, 6, 3], sr_ratios=[8, 4, 2, 1], **kwargs)
-    model.default_cfg = _cfg()
-
-    return model
-
-
-@register_model
-def pvt_v2_b3(pretrained=False, **kwargs):
-    model = PyramidVisionTransformerDecoder(
-        patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4], qkv_bias=True,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 4, 18, 3], sr_ratios=[8, 4, 2, 1],
-        **kwargs)
-    model.default_cfg = _cfg()
-
-    return model
-
-
-@register_model
-def pvt_v2_b4(pretrained=False, **kwargs):
-    model = PyramidVisionTransformerDecoder(
-        patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4], qkv_bias=True,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 8, 27, 3], sr_ratios=[8, 4, 2, 1],
-        **kwargs)
-    model.default_cfg = _cfg()
-
-    return model
-
-
-@register_model
-def pvt_v2_b5(pretrained=False, **kwargs):
-    model = PyramidVisionTransformerDecoder(
-        patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[4, 4, 4, 4], qkv_bias=True,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 6, 40, 3], sr_ratios=[8, 4, 2, 1],
-        **kwargs)
-    model.default_cfg = _cfg()
-
-    return model
-
-
-@register_model
-def pvt_v2_b2_li(pretrained=False, **kwargs):
-    model = PyramidVisionTransformerDecoder(
-        patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4], qkv_bias=True,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 4, 6, 3], sr_ratios=[8, 4, 2, 1], linear=True, **kwargs)
-    model.default_cfg = _cfg()
-
-    return model

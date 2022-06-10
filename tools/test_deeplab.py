@@ -21,6 +21,7 @@ from PIL import Image
 
 from model import deeplab
 from dataset.dataset import SampleDataset, SegmentDataset
+from dataset.lung_dataset import CovidDataset
 from dataset.scale_att_dataset import AttackDataset
 from util import save_metrics, print_metrics, make_one_hot
 from loss import combined_loss, dice_score
@@ -117,24 +118,27 @@ def test():
     n_channels = args.channels
     suffix = args.suffix
     #for fundus and brain
-    if 'octa' in data_path:
+    if args.attacks == 'scale_attk':
+        test_dataset = AttackDataset(args.data_path, args.channels, args.mode, args.data_path)
+    elif 'octa' in data_path:
         # test_dataset = SampleDataset(data_path, n_classes, n_channels, mode= 'train',
         #     data_type='org',width=args.width,height=args.height)
         # test_dataset = AttackDataset(args.data_path, args.channels, 'test', args.data_path)
         test_dataset = SegmentDataset(data_path, args.classes, args.channels, args.mode, None, args.adv_model,
                                       args.attacks,
                                       args.target, args.data_type, args.width, args.height, args.mask_type, suffix)
-        test_sampler = SubsetRandomSampler(np.arange(len(test_dataset)))
+    elif 'lung' in data_path:
+        test_dataset = CovidDataset(data_path, n_classes, n_channels, mode='test', model=args.model,
+                                    attack_type=args.attacks, data_type=args.data_type, mask_type=args.mask_type, \
+                                    target_class=args.target, width=args.width, height=args.height)
     else:
         # test_dataset = SegmentDataset(data_path, n_classes, n_channels, mode= 'test', gen_mode=None,model=None,
         #     type=None,target_class=None,data_type='org',width=args.width,height=args.height, mask_type=None, suffix=None)
         test_dataset = SegmentDataset(data_path, args.classes, args.channels, args.mode, None, args.adv_model,
                                       args.attacks,
                                       args.target, args.data_type, args.width, args.height, args.mask_type, suffix)
-        # test_dataset = AttackDataset(args.data_path, args.channels, 'test', args.data_path)
-        test_sampler = SubsetRandomSampler(np.arange(len(test_dataset)))
+    test_sampler = SubsetRandomSampler(np.arange(len(test_dataset)))
     print('total test image : {}'.format(len(test_sampler)))
-
 
     test_loader = DataLoader(
         test_dataset,
@@ -149,9 +153,7 @@ def test():
                                                   in_channels=args.channels, pretrained_backbone=False)
     if args.separable_conv and 'plus' in args.model:
         deeplab.convert_to_separable_conv(model.classifier)
-    # utils.set_bn_momentum(model.backbone, momentum=0.01)
 
-    # model = nn.DataParallel(model)
     model.to(device)
     model_path = os.path.join(args.ckpt, args.data_path, args.model+'.pth')
     print('load model ', model_path)
@@ -162,7 +164,12 @@ def test():
     epoch_size = 0
     metrics = defaultdict(float)
     model.eval()
-    output_path = os.path.join(args.output_path, args.data_path, args.model)
+    if args.mask_type != "":
+        output_path = os.path.join(args.output_path, args.data_path, args.model, args.adv_model,
+                                        args.attacks, args.data_type, 'm' + args.mask_type + 't' + args.target, suffix)
+    else:
+        output_path = os.path.join(args.output_path, args.data_path, args.model, args.adv_model,
+                                        args.attacks, args.data_type)
     if not os.path.exists(output_path):
         os.makedirs(output_path)
     print('output path', output_path)
@@ -170,9 +177,8 @@ def test():
     cm = plt.get_cmap('gist_rainbow', 1000)
     # cm= plt.get_cmap('viridis', 28)
     with torch.no_grad():
-
         for batch_idx, (images, labels) in enumerate(test_loader):
-
+            bcz = images.shape[0]
             images = images.to(device).float()
             labels = labels.to(device).long()
             # masks = labels
@@ -202,7 +208,7 @@ def test():
                 # print(np.unique(cm(mask)))
                 # print('min,ma', np.min(output), np.max(output), output.shape)
                 output = Image.fromarray(output)
-                output.save(os.path.join(output_path, '{}.png'.format(batch_idx * args.batch_size + i)))
+                output.save(os.path.join(output_path, '{}.png'.format(batch_idx * bcz+ i)))
 
             del images, labels,  pred, dice
 

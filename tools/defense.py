@@ -19,72 +19,24 @@ print(path.dirname(path.dirname(path.abspath(__file__))))
 from util import make_one_hot
 from dataset.dataset import AgDataset
 from dataset.semantic_dataset import SampleDataset
+from dataset.lung_dataset import CovidDataset
 from dataset.scale_att_dataset import AttackDataset
 from data import DefenseDataset, DefenseSclTestDataset
 from model import UNet, SegNet, DenseNet
+from model.AgNet.core.models import AG_Net
 from loss import dice_score
 from model import deeplab
 # from model.Denoiser import get_net
 from model.Denoiser_pvt import get_net
 # from model.Denoiser_new import get_net
+from skimage.metrics import structural_similarity as ssim
+from pytorch_msssim import ms_ssim, ssim,  SSIM, MS_SSIM
+# from piq import FSIM
+import piq
 from util import AverageMeter
 import cv2
 from model.AgNet.core.utils import get_model, dice_loss
 from opts import get_args
-
-
-# def get_args():
-#
-#     parser = OptionParser()
-#     parser.add_option('--data_path', dest='data_path',type='string',
-#                       default='data/samples', help='data path')
-#     parser.add_option('--model_path', dest='model_path',type='string',
-#                       default='checkpoints/', help='model_path')
-#     parser.add_option('--denoiser_path', dest='denoiser_path', type='string',
-#                       default='checkpoints/denoiser/', help='denoiser_path')
-#     parser.add_option('--classes', dest='classes', default=2, type='int',
-#                       help='number of classes')
-#     parser.add_option('--channels', dest='channels', default=3, type='int',
-#                       help='number of channels')
-#     parser.add_option('--width', dest='width', default=256, type='int',
-#                       help='image width')
-#     parser.add_option('--height', dest='height', default=256, type='int',
-#                       help='image height')
-#     parser.add_option('--model', dest='model', type='string',default='',
-#                       help='model name(UNet, SegNet, DenseNet)')
-#     parser.add_option('--batch_size', dest='batch_size', default=10, type='int',
-#                       help='batch size')
-#     parser.add_option('--adv_model', dest='adv_model', type='string',default='',
-#                       help='model name(UNet, SegNet, DenseNet)')
-#     parser.add_option('--GroupNorm', action="store_true", default=True,
-#                         help='decide to use the GroupNorm')
-#     parser.add_option('--BatchNorm', action="store_false", default=False,
-#                         help='decide to use the BatchNorm')
-#     parser.add_option('--data_type', dest='data_type', type='string',default='',
-#                       help='org or DAG')
-#     parser.add_option('--mode', dest='mode', type='string',default='test',
-#                       help='mode test origin or adversarial')
-#     parser.add_option('--gpu', dest='gpu',type='string',
-#                       default='gpu', help='gpu or cpu')
-#     parser.add_option('--attacks', dest='attacks', type='string', default="",
-#                       help='attack types: Rician, DAG_A, DAG_B, DAG_C')
-#     parser.add_option('--target', dest='target', default='', type='string',
-#                       help='target class')
-#     parser.add_option('--device1', dest='device1', default=0, type='int',
-#                       help='device1 index number')
-#     parser.add_option('--device2', dest='device2', default=-1, type='int',
-#                       help='device2 index number')
-#     parser.add_option('--device3', dest='device3', default=-1, type='int',
-#                       help='device3 index number')
-#     parser.add_option('--device4', dest='device4', default=-1, type='int',
-#                       help='device4 index number')
-#     parser.add_option('--output_path', dest='output_path', type='string',
-#                       default='./output', help='output_path')
-#     parser.add_option('--denoise_output', dest='denoise_output', type='string',
-#                       default='./output/denoised_imgs/', help='denoise_output')
-#
-#     (options, args) = parser.parse_args()
-#     return options
 
 
 def test(model, denoiser, args):
@@ -97,14 +49,18 @@ def test(model, denoiser, args):
     #                                 args.data_type, args.attacks)
 
     if args.attacks =='scl_attk':
-        args.output_path = '{}/{}/{}/{}/'.format(args.output_path,args.data_path,args.model,args.attacks)
-        args.denoise_output = os.path.join(args.denoise_output, args.data_path, args.model,
+        output_path = '{}/{}/{}/{}/'.format(args.output_path,args.data_path,args.model,args.attacks)
+        denoise_output = os.path.join(args.denoise_output, args.data_path, args.model,
                                         args.data_type, args.attacks, suffix)
     else:
-        args.output_path = os.path.join(args.output_path, args.data_path, args.model, args.adv_model,
-                                        args.data_type, args.attacks, 'm'+ args.mask_type+'t'+args.target, suffix)
-        args.denoise_output = os.path.join(args.denoise_output, args.data_path, args.model, args.adv_model,
-                                        args.data_type, args.attacks, 'm'+ args.mask_type+'t'+args.target, suffix)
+        output_path = os.path.join(args.output_path, args.data_path, args.model, args.adv_model,
+                                        args.attacks,args.data_type, 'm'+ args.mask_type+'t'+args.target, suffix)
+        denoise_output = os.path.join(args.denoise_output, args.data_path, args.model, args.adv_model,
+                                        args.attacks, args.data_type, 'm'+ args.mask_type+'t'+args.target, suffix)
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+    if not os.path.exists(denoise_output):
+        os.makedirs(denoise_output)
     print('output path', args.output_path)
     print('denoised image path', args.denoise_output)
     device = torch.device(args.device)
@@ -117,16 +73,21 @@ def test(model, denoiser, args):
     # test_dataset = SampleDataset(data_path,args.classes, args.channels, args.mode, None, args.adv_model, args.attacks,
     #                              args.target, args.data_type, args.width, args.height, args.mask_type, suffix)
     if args.attacks=='scl_attk':
-        test_dataset = DefenseSclTestDataset(data_path, 'test', args.channels)
-    elif args.attacks=='semantic':
+        test_dataset = DefenseSclTestDataset(data_path, 'test', args.channels, data_type=args.data_type)
+    elif any(attack in args.attacks for attack in ['dag','ifgsm']):
         if args.data_path=='brain':
             test_dataset = AgDataset(data_path, n_classes, args.channels, args.mode, args.model, \
-                             args.attacks, args.target, args.data_type, args.width, args.height, args.mask_type,
-                             suffix=args.suffix)
+                             args.attacks, args.data_type, args.mask_type,args.target, args.width, args.height,
+            )
+        elif args.data_path=='lung':
+            test_dataset = CovidDataset(data_path, n_classes, args.channels, args.mode, args.model, \
+                                         args.attacks, args.data_type, args.mask_type, args.target, args.width,
+                                         args.height,
+                                         )
         else:
             test_dataset = SampleDataset(data_path, n_classes, args.channels, args.mode, args.model, \
-                                     args.attacks, args.target, args.attacks, args.width, args.height, args.mask_type,
-                                     suffix=args.suffix)
+                             args.attacks, args.data_type, args.mask_type,args.target, args.width, args.height,
+            )
     else:
         test_dataset = AttackDataset(args.data_path, args.channels, args.mode, args.data_path)
 
@@ -140,9 +101,12 @@ def test(model, denoiser, args):
     print('test_dataset : {}, test_loader : {}'.format(len(test_dataset), len(test_loader)))
 
     score = AverageMeter()
-    
-    # test
-    
+
+    ssims = []
+    fsims = []
+    adv_imgs = []
+    defened_imgs = []
+
     model.eval()   # Set model to evaluate mode
     denoiser.eval()
     if not os.path.exists(args.output_path):
@@ -152,11 +116,11 @@ def test(model, denoiser, args):
     # cm = plt.cm.jet
     cm = plt.get_cmap('gist_rainbow',1000)
     # cm= plt.get_cmap('viridis', 28)
+    ssim_module = SSIM(data_range=1, size_average=False, channel=args.channels)
     softmax_2d = nn.Softmax2d()
     EPS = 1e-12
     with torch.no_grad():
         for batch_idx, (inputs, labels) in enumerate(test_loader):
-        
             inputs = inputs.to(device).float()
             labels = labels.to(device).long()
             if args.attacks == 'scl_attk' or args.attacks=='semantic':
@@ -164,6 +128,14 @@ def test(model, denoiser, args):
             else:
                 target = make_one_hot(labels[:, 0, :, :], n_classes, device)
             denoised_img = denoiser(inputs)
+            denoised_img[denoised_img<0]=0
+            denoised_img[denoised_img > 1] = 1
+            # print('in', inputs.max(), denoised_img.min(), denoised_img.max())
+            ssim_noise = ssim_module(inputs, denoised_img)
+            # print('ssim', ssim_noise.shape)
+            ssims.append(ssim_noise)
+            # fsim_val = piq.fsim(inputs, denoised_img, data_range=1., reduction='none')
+            # fsims.append(fsim_val)
             # print('max', torch.max(denoised_img))
             # for i, denoised_im in enumerate(denoised_img):
             #     # print(denoised_im.shape)
@@ -202,18 +174,24 @@ def test(model, denoiser, args):
                 # print(np.unique(cm(mask)))
                 # print('min,ma', np.min(output), np.max(output), output.shape)
                 output= Image.fromarray(output)
-                output.save(os.path.join(args.output_path,'{}.png'.format(batch_idx*args.batch_size+i)))
+                output.save(os.path.join(output_path,'{}.png'.format(batch_idx*bsz+i)))
             denoised_img = np.moveaxis(denoised_img.cpu().numpy(),1, -1)
             for i, denoised_im in enumerate(denoised_img):
                 # print(denoised_im.shape)
-                cv2.imwrite(os.path.join(args.denoise_output,'{}.png'.format(batch_idx*args.batch_size+i)), denoised_im*255)
+                cv2.imwrite(os.path.join(denoise_output,'{}.png'.format(batch_idx*bsz+i)), denoised_im*255)
             del inputs, labels, target,  loss
-            
+
     avg_score = score.avg
     if args.model == 'AG_Net':
         avg_score = 1-avg_score
     
     print('dice_score : {:.4f}'.format(avg_score))
+    avg_ssim = torch.mean(torch.cat(ssims))
+    avg_ssim = avg_ssim.detach().cpu().numpy()
+    avg_ssim = np.round(avg_ssim,2)
+    print('avg ssim: ', avg_ssim)
+    # avg_fsim = torch.mean(fsim_val).detach().cpu().numpy()
+    # print('fsim', avg_fsim)
 
 def onehot2norm(imgs):
     out = np.argmax(imgs,axis=1)
@@ -236,10 +214,7 @@ if __name__ == "__main__":
     elif args.model == 'DenseNet':
         model = DenseNet(in_channels = n_channels, n_classes = n_classes)
     elif args.model == 'AgNet':
-        models_list = ['AG_Net']
-        model_name = models_list[0]
-        model = get_model(model_name)
-        model = model(n_classes=n_classes, bn=args.GroupNorm, BatchNorm=args.BatchNorm)
+        model = AG_Net(n_classes=n_classes,n_channels=args.channels, bn=args.GroupNorm, BatchNorm=args.BatchNorm)
         model = model.double()
     else:
         model = deeplab.modeling.__dict__[args.model](num_classes=args.classes, output_stride=args.output_stride,
@@ -254,14 +229,13 @@ if __name__ == "__main__":
     # prefix = 'trf_rd'
     # guide_mode = 'SegNet'
     # prefix = 'pvt_scl'
-    prefix = 'pvt_scl_plus_leff'
+    # prefix = 'pvt_scl_plus_leff'
+    # prefix = 'pvt_semantic_plus_leff'
+    prefix = args.suffix
     # prefix = 'pvt_scl_plus_leff_sub'
     guide_mode = 'UNet'
     # guide_mode = 'DenseNet'
-    if 'scl' in args.attacks:
-        denoiser_path = os.path.join(args.denoiser_path, args.data_path, '{}_{}.pth'.format(guide_mode,prefix))
-    else:
-        denoiser_path = os.path.join(args.denoiser_path, args.data_path, args.attacks, '{}_{}.pth'.format(guide_mode, prefix))
+    denoiser_path = os.path.join(args.denoiser_path, args.data_path, args.attacks, '{}_{}.pth'.format(guide_mode,prefix))
     # denoiser_path = os.path.join(args.denoiser_path, args.data_path, '{}.pth'.format(guide_mode))
     print('denoiser ', denoiser_path)
     # denoiser = get_net(args.height, args.width, args.classes, args.channels, denoiser_path, args.batch_size)

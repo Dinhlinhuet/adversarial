@@ -279,8 +279,10 @@ def cw(args, idx, model, image, ground_truth, oh_label, adv_target, num_iteratio
 
     if torch.all(torch.eq(oh_label, adv_target)):
         # print('equally')
-        np_img = image[0].detach().cpu().numpy()
-        np_img = np.moveaxis(np_img, 0, -1)
+        # np_img = image[0].detach().cpu().numpy()
+        # np_img = np.moveaxis(np_img, 0, -1)
+        np_img = image.detach().cpu().numpy()
+        # np_img = np.moveaxis(np_img, 1, -1)
         return np_img
     # org_img = image.clone()
     kappa = 0.0
@@ -321,11 +323,13 @@ def cw(args, idx, model, image, ground_truth, oh_label, adv_target, num_iteratio
         # print('condi', condition.size())
         if(condition.sum()==0):
             print("Condition Reached")
-            if a==0:
-                np_img = image[0].detach().cpu().numpy()
-                np_img = np.moveaxis(np_img, 0, -1)
-                return np_img
-            break
+            # if a==0:
+                # np_img = image[0].detach().cpu().numpy()
+                # np_img = np.moveaxis(np_img, 0, -1)
+            np_img = image.detach().cpu().numpy()
+            # np_img = np.moveaxis(np_img, 1, -1)
+            return np_img
+            # break
 
         # #Finding pixels to purturb
         # adv_log=torch.mul(output,adv_target)
@@ -426,8 +430,10 @@ def cw(args, idx, model, image, ground_truth, oh_label, adv_target, num_iteratio
         # print("val", torch.min(r_m_norm), torch.max(r_m_norm), r_m_norm.size())
         # print("valimg", torch.min(img), torch.max(img))
         # np_img = image[0][0].detach().cpu().numpy()
-        np_img = img[0].detach().cpu().numpy()
-        np_img = np.moveaxis(np_img, 0, -1)
+        # np_img = img[0].detach().cpu().numpy()
+        # np_img = np.moveaxis(np_img, 0, -1)
+        np_img = img.detach().cpu().numpy()
+        # np_img = np.moveaxis(np_img, 1, -1)
         image_iteration.append(np_img)
         if step % (num_iterations // 10) == 0:
             if cost > prev:

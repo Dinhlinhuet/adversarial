@@ -11,16 +11,16 @@ from model.AgNet.guided_filter_pytorch.guided_filter_attention import FastGuided
 
 
 class AG_Net(nn.Module):
-    def __init__(self, n_classes, bn=True, BatchNorm=False):
+    def __init__(self, n_classes, n_channels, bn=True, BatchNorm=False):
         super(AG_Net, self).__init__()
 
         # mutli-scale simple convolution
-        self.conv2 = M_Conv(3, 64, kernel_size=3, bn=bn, BatchNorm=BatchNorm)
-        self.conv3 = M_Conv(3, 128, kernel_size=3, bn=bn, BatchNorm=BatchNorm)
-        self.conv4 = M_Conv(3, 256, kernel_size=3, bn=bn, BatchNorm=BatchNorm)
+        self.conv2 = M_Conv(n_channels, 64, kernel_size=3, bn=bn, BatchNorm=BatchNorm)
+        self.conv3 = M_Conv(n_channels, 128, kernel_size=3, bn=bn, BatchNorm=BatchNorm)
+        self.conv4 = M_Conv(n_channels, 256, kernel_size=3, bn=bn, BatchNorm=BatchNorm)
 
         # the down convolution contain concat operation
-        self.down1 = M_Encoder(3, 32, kernel_size=3, bn=bn, BatchNorm=BatchNorm)  # 512
+        self.down1 = M_Encoder(n_channels, 32, kernel_size=3, bn=bn, BatchNorm=BatchNorm)  # 512
         self.down2 = M_Encoder(64 + 32, 64, kernel_size=3, bn=bn, BatchNorm=BatchNorm)  # 256
         self.down3 = M_Encoder(128 + 64, 128, kernel_size=3, bn=bn, BatchNorm=BatchNorm)  # 128
         self.down4 = M_Encoder(256 + 128, 256, kernel_size=3, bn=bn, BatchNorm=BatchNorm)  # 64

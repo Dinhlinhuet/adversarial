@@ -20,6 +20,7 @@ print(path.dirname(path.dirname(path.abspath(__file__))))
 from optparse import OptionParser
 
 from dataset.dataset import SampleDataset, SegmentDataset
+from dataset.lung_dataset import CovidDataset
 from model import UNet, SegNet, DenseNet, cenet
 from util import save_metrics, print_metrics
 from loss import combined_loss
@@ -29,7 +30,7 @@ def get_args():
     parser = OptionParser()
     parser.add_option('--data_path', dest='data_path',type='string',
                       default='data/samples', help='data path')
-    parser.add_option('--epochs', dest='epochs', default=50, type='int',
+    parser.add_option('--epochs', dest='epochs', default=100, type='int',
                       help='number of epochs')
     parser.add_option('--classes', dest='classes', default=2, type='int',
                       help='number of classes')
@@ -69,14 +70,21 @@ def train_net(model, args):
     device = torch.device(args.device)
 
     model = model.to(device)
-
+    val_dataset = None
     #for fundus and brain
-    if 'octa' in data_path:
+    if 'octa' in data_path or 'brain' in data_path:
         train_dataset = SampleDataset(data_path, n_classes, n_channels, mode= 'train',
             data_type='org',width=args.width,height=args.height)
         train_indices, val_indices = train_test_split(np.arange(len(train_dataset)), test_size=0.2, random_state=42)
         train_sampler = SubsetRandomSampler(train_indices)
         val_sampler = SubsetRandomSampler(val_indices)
+    elif 'lung' in data_path:
+        train_dataset = CovidDataset(data_path, n_classes, n_channels, mode='train', model=None,
+                                      data_type='org', width=args.width, height=args.height)
+        val_dataset = CovidDataset(data_path, n_classes, n_channels, mode='val', model=None,
+                                     data_type='org', width=args.width, height=args.height)
+        train_sampler = SubsetRandomSampler(np.arange(len(train_dataset)))
+        val_sampler = SubsetRandomSampler(np.arange(len(val_dataset)))
     else:
         train_dataset = SegmentDataset(data_path, n_classes, n_channels, mode= 'train', gen_mode=None,model=None,
             type=None,target_class=None,data_type='org',width=args.width,height=args.height, mask_type=None, suffix=None)
@@ -84,8 +92,9 @@ def train_net(model, args):
             type=None,target_class=None,data_type='org',width=args.width,height=args.height, mask_type=None, suffix=None)
         train_sampler = SubsetRandomSampler(np.arange(len(train_dataset)))
         val_sampler = SubsetRandomSampler(np.arange(len(val_dataset)))
-    print('total train image : {}'.format(len(train_sampler)))
-    print('total val image : {}'.format(len(val_sampler)))
+    print('total train image : {}'.format(len(train_dataset)))
+    if not val_dataset is None:
+        print('total val image : {}'.format(len(val_dataset)))
 
 
     train_loader = DataLoader(
@@ -94,13 +103,20 @@ def train_net(model, args):
         num_workers=4,
         sampler=train_sampler
     )
-
-    val_loader = DataLoader(
-        train_dataset,
-        batch_size=args.batch_size,
-        num_workers=4,
-        sampler=val_sampler
-    )
+    if 'lung' in data_path:
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=args.batch_size,
+            num_workers=4,
+            sampler=val_sampler
+        )
+    else:
+        val_loader = DataLoader(
+            train_dataset,
+            batch_size=args.batch_size,
+            num_workers=4,
+            sampler=val_sampler
+        )
 
     start_epoch = args.start_epoch
     save_dir = args.save_dir

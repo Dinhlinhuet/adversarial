@@ -15,7 +15,10 @@
 #        --data_path fundus --model UNet --classes 3 --channels 3  --batch_size 4 --suffix pvt  --device 1
 
 python tools/train_denoiser_scl.py \
-        --data_path fundus --model UNet --classes 3 --channels 3  --batch_size 4 --suffix pvt_scl_plus_leff  --device 0
+        --data_path fundus --model UNet --classes 3 --channels 3  --batch_size 4 --suffix pvt_scl_cat_leff  --device 0
+
+#python tools/train_denoiser_scl.py \
+#        --data_path lung --model UNet --classes 2 --channels 1  --batch_size 4 --suffix pvt_scl_cat_leff  --device 0
 
 
 #python tools/train_denoiser_scl.py \

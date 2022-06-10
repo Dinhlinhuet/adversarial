@@ -14,16 +14,16 @@ from torch.nn import DataParallel
 from sklearn.model_selection import train_test_split
 from torchsummary import summary
 from collections import defaultdict
-
+import copy
 from os import path
 from optparse import OptionParser
-sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+# sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+sys.path.insert(0,path.dirname(path.dirname(path.abspath(__file__))))
 print(path.dirname(path.dirname(path.abspath(__file__))))
 from loss import onehot2norm, dice_loss, make_one_hot
-import copy
-import time
 
-from data import DefenseDataset
+from data import DefenseDataset, DefenseSclDataset
+from dataset.semantic_dataset import DefenseSemanticDataset
 from model import UNet, SegNet, DenseNet
 from model.Denoiser import get_net
 from util import save_metrics, print_metrics
@@ -57,6 +57,8 @@ def get_args():
                         help='ranking within the nodes')
     parser.add_option('--suffix', dest='suffix', type='string',
                       default='', help='suffix to purpose')
+    parser.add_option('--data_type', dest='data_type', type='string',
+                      default='', help='data type to purpose')
     parser.add_option('--resume', default='', type='string', metavar='PATH',
                         help='path to latest checkpoint (default: none)')
     parser.add_option('--target_model', default='./checkpoints/', type='string', metavar='PATH',
@@ -65,21 +67,15 @@ def get_args():
                         help='manual epoch number (useful on restarts)')
     parser.add_option('--save-dir', default='./checkpoints/denoiser/', type='string', metavar='SAVE',
                         help='directory to save checkpoint (default: none)')
-    parser.add_option('--device1', dest='device1', default=0, type='int',
+    parser.add_option('--device1', dest='device1', default=1, type='int',
                       help='device1 index number')
-    parser.add_option('--device', dest='device', default=-1, type='int',
+    parser.add_option('--device', dest='device', default=0, type='int',
                       help='device index number')
-    parser.add_option('--device3', dest='device3', default=-1, type='int',
-                      help='device3 index number')
-    parser.add_option('--device4', dest='device4', default=-1, type='int',
-                      help='device4 index number')
 
     (options, args) = parser.parse_args()
     return options
 
-def train_net(model, denoiser, args):
-    # rank = args.nr * args.gpus + gpu
-    # dist.init_process_group(backend='nccl', init_method='env://', world_size=args.world_size, rank=rank)
+def train_net(model, denoiser, args, denoiser_path):
     data_path = args.data_path
     num_epochs = args.epochs
     n_classes = args.classes
@@ -87,31 +83,8 @@ def train_net(model, denoiser, args):
     # data_height = args.height
 
     # set device configuration
-    device_ids = []
+    device = torch.device(args.device)
 
-    if args.gpus >= 1 :
-        
-        if not torch.cuda.is_available() :
-            print("No cuda available")
-            raise SystemExit
-            
-        # device = torch.device(args.device1)
-        device = torch.device('cuda')
-        device_ids.append(args.device1)
-        if args.device != -1 :
-            print('device', args.device)
-            device_ids.append(args.device)
-            device = torch.device('cuda:1')
-            
-        if args.device3 != -1 :
-            device_ids.append(args.device3)
-        
-        if args.device4 != -1 :
-            device_ids.append(args.device4)
-
-    else :
-        device = torch.device("cpu")
-    
     params = denoiser.parameters()
     # torch.cuda.set_device(gpu)
     # denoiser.cuda(gpu)
@@ -127,15 +100,26 @@ def train_net(model, denoiser, args):
 
     # set image into training and validation dataset
 
-    train_dataset = DefenseDataset(data_path,'train', args.channels)
+    if 'scl' in args.data_type:
+        train_dataset = DefenseSclDataset(data_path, 'train', args.channels)
+    elif any(data_name in args.data_type for data_name in ['dag','ifgsm']):
+        train_dataset = DefenseDataset(data_path,'train', args.channels, args.data_type)
+    else:
+        train_dataset = DefenseSemanticDataset(data_path, 'train', args.channels, args.data_type)
 
-    train_indices, val_indices = train_test_split(np.arange(len(train_dataset)), test_size=0.2, random_state=42)
-    train_sampler = SubsetRandomSampler(train_indices)
-    val_sampler = SubsetRandomSampler(val_indices)
-    if 'fundus' in args.data_path:
-        val_dataset = DefenseDataset(data_path, 'val', args.channels)
+    if any(data_name in data_path for data_name in ['fundus', 'lung']):
+        if 'scl' in args.data_type:
+            val_dataset = DefenseSclDataset(data_path, 'train', args.channels)
+        elif any(attack in args.data_type for attack in ['dag','ifgsm']):
+            val_dataset = DefenseDataset(data_path, 'val', args.channels, args.data_type)
+        else:
+            val_dataset = DefenseSemanticDataset(data_path, 'val', args.channels, args.data_type)
         train_sampler = SubsetRandomSampler(np.arange(len(train_dataset)))
         val_sampler = SubsetRandomSampler(np.arange(len(val_dataset)))
+    else:
+        train_indices, val_indices = train_test_split(np.arange(len(train_dataset)), test_size=0.2, random_state=42)
+        train_sampler = SubsetRandomSampler(train_indices)
+        val_sampler = SubsetRandomSampler(val_indices)
     print('total image : {}'.format(len(train_dataset)*2))
 
     # train_size = len(train_dataset)*2
@@ -165,35 +149,11 @@ def train_net(model, denoiser, args):
             sampler=val_sampler
         )
     start_epoch = args.start_epoch
-    save_dir = args.save_dir
     if args.resume:
         checkpoint = torch.load(args.resume)
-        save_dir = args.save_dir
         model.load_state_dict(checkpoint)
     else:
         print('not resume')
-        # if start_epoch == 0:
-        #     start_epoch = 1
-        if not save_dir:
-            exp_id = time.strftime('%Y%m%d-%H%M%S', time.localtime())
-            save_dir = os.path.join(args.save_dir, exp_id)
-        else:
-            save_dir = args.save_dir
-    print('save dir', save_dir)
-    # model_folder = os.path.abspath('./checkpoints/{}/'.format(args.data_path))
-    denoiser_folder = os.path.abspath('./{}/{}/'.format(save_dir,args.data_path))
-    if not os.path.exists(denoiser_folder):
-        os.makedirs(denoiser_folder)
-    
-    # if args.model == 'UNet':
-    #     denoiser_path = os.path.join(denoiser_folder, 'UNet.pth')
-    #
-    # elif args.model == 'SegNet':
-    #     denoiser_path = os.path.join(denoiser_folder, 'SegNet.pth')
-    #
-    # elif args.model == 'DenseNet':
-    denoiser_path = os.path.join(denoiser_folder,'{}_{}.pth'.format(args.model, args.suffix))
-    # denoiser_path = os.path.join(denoiser_folder, args.model + '_pgd.pth')
     print('save path', denoiser_path)
     # set optimizer
 
@@ -435,8 +395,11 @@ if __name__ == "__main__":
     elif args.model == 'DenseNet':
         model = DenseNet(in_channels=n_channels, n_classes=n_classes)
     model.load_state_dict(torch.load(args.target_model))
-    denoiser_path = os.path.join(args.save_dir, args.data_path, args.model+'.pth')
+    denoiser_folder = os.path.join(args.save_dir, args.data_path, args.data_type)
+    if not os.path.exists(denoiser_folder):
+        os.makedirs(denoiser_folder)
+    denoiser_path = os.path.join(denoiser_folder, '{}_{}.pth'.format(args.model,args.suffix))
     denoiser= get_net(args.height, args.width, n_classes, args.channels, args.resume)
     summary(model, input_size=(n_channels, args.height, args.width), device = 'cpu')
     summary(denoiser, input_size=(n_channels, args.height, args.width), device='cpu')
-    loss_history = train_net(model, denoiser, args)
+    train_net(model, denoiser, args, denoiser_path)

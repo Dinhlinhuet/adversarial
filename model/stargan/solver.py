@@ -19,6 +19,7 @@ class Solver(object):
         self.data_loader = data_loader
 
         # Model configurations.
+        self.in_chan = config.channels
         self.c_dim = config.c_dim
         self.c2_dim = config.c2_dim
         self.image_size = config.image_size
@@ -69,8 +70,8 @@ class Solver(object):
 
     def build_model(self):
         """Create a generator and a discriminator."""
-        self.G = Generator(self.g_conv_dim, self.c_dim, self.g_repeat_num)
-        self.D = Discriminator(self.image_size, self.d_conv_dim, self.c_dim, self.d_repeat_num)
+        self.G = Generator(self.in_chan, self.g_conv_dim, self.c_dim, self.g_repeat_num)
+        self.D = Discriminator(self.in_chan, self.image_size, self.d_conv_dim, self.c_dim, self.d_repeat_num)
 
         self.g_optimizer = torch.optim.Adam(self.G.parameters(), self.g_lr, [self.beta1, self.beta2])
         self.d_optimizer = torch.optim.Adam(self.D.parameters(), self.d_lr, [self.beta1, self.beta2])
@@ -317,14 +318,16 @@ class Solver(object):
                     save_image(self.denorm(x_concat.data.cpu()), sample_path, nrow=int(np.sqrt(len(x_concat))), padding=0)
                     print('Saved real and fake images into {}...'.format(sample_path))
 
-            # if g_loss<best_g_loss:
-            #     best_g_loss=g_loss
             # Save model checkpoints.
-            # if (i+1) % self.model_save_step == 0 and i>=3e4:
+            if (i+1) % self.model_save_step == 0 and i>=4e4:
+                best_g_loss = curr_g_loss
+                G_path = os.path.join(self.model_save_dir, '{}-G.ckpt'.format(i+1))
+                D_path = os.path.join(self.model_save_dir, '{}-D.ckpt'.format(i+1))
+                torch.save(self.G.state_dict(), G_path)
+                torch.save(self.D.state_dict(), D_path)
+                print('Saved model checkpoints into {}...'.format(self.model_save_dir))
             if curr_g_loss < best_g_loss:
                 best_g_loss = curr_g_loss
-                # G_path = os.path.join(self.model_save_dir, '{}-G.ckpt'.format(i+1))
-                # D_path = os.path.join(self.model_save_dir, '{}-D.ckpt'.format(i+1))
                 G_path = os.path.join(self.model_save_dir, 'G.ckpt')
                 D_path = os.path.join(self.model_save_dir, 'D.ckpt')
                 torch.save(self.G.state_dict(), G_path)
