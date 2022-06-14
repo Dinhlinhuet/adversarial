@@ -53,6 +53,8 @@ def get_args():
                       help='image height')
     parser.add_option('--model', dest='model', type='string',
                       help='model name(UNet, SegNet, DenseNet)')
+    parser.add_option('-m', '--middle', dest='middle',  default=False, action="store_true",
+                      help='whether to have middle connection')
     parser.add_option('--gpus', dest='gpus',type='int',
                       default=1, help='gpu or cpu')
     parser.add_option('-n', '--nodes', default=1, type='int', metavar='N',
@@ -75,6 +77,7 @@ def get_args():
                       help='device1 index number')
 
     (options, args) = parser.parse_args()
+    print('model with middle connection', options.middle)
     return options
 
 def train_net(model, denoiser, args):
@@ -409,7 +412,7 @@ if __name__ == "__main__":
         model = DenseNet(in_channels=n_channels, n_classes=n_classes)
     model.load_state_dict(torch.load(args.target_model))
     denoiser_path = os.path.join(args.save_dir, args.data_path, args.data_type, args.model+'.pth')
-    denoiser= get_net(args.height, args.channels, args.resume)
+    denoiser= get_net(args.height, args.channels, args.resume, args.middle)
     # summary(model, input_size=(n_channels, args.height, args.width), device = 'cpu')
     # summary(denoiser, input_size=(n_channels, args.height, args.width), device='cpu')
     pytorch_total_params = sum(p.numel() for p in denoiser.parameters())

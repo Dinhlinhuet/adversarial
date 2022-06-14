@@ -23,6 +23,8 @@ def get_args():
                       help='decide to use the BatchNorm')
     parser.add_argument('--model', dest='model', type=str,
                       help='model name(UNet, SegNet, DenseNet)')
+    parser.add_argument('-m', '--middle', dest='middle',  default=False, action="store_true",
+                      help='whether to have middle connection')
     parser.add_argument('--attacks', dest='attacks', type=str, default="",
                       help='attack types: dag')
     parser.add_argument('--target', dest='target', default='0', type=str,
@@ -35,6 +37,8 @@ def get_args():
                                             help='mode test origin or adversarial')
     parser.add_argument('--data_type', dest='data_type', type=str,default='',
                       help='org or DAG')
+    parser.add_argument('--source_version', dest='source_version', default='0', type=str,
+                        help='source_version')
     parser.add_argument('--gpus', dest='gpus',type=int,
                           default=1, help='gpu or cpu')
     parser.add_argument('--batch_size', dest='batch_size', default=2, type=int,
@@ -70,4 +74,5 @@ def get_args():
     parser.add_argument("--output_stride", type=int, default=16, choices=[8, 16])
     parser.add_argument('--exp_folder', type=str, default='./output/adv/exps', help='Experiment folder to store all output.')
     args = parser.parse_args()
+    print('model with middle connection', args.middle)
     return args

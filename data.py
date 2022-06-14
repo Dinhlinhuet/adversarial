@@ -225,11 +225,12 @@ class DefenseSclDataset(Dataset):
         return len(self.images)
 
 class DefenseSclTestDataset(Dataset):
-    def __init__(self, data_path, phase, channels, data_type):
+    def __init__(self, data_path, phase, channels, data_type, args):
         assert phase == 'train' or phase == 'val' or phase == 'test'
         self.phase = phase
         # self.dataset = dataset
         # self.attack = attack
+        source_version = args.source_version
         self.data_path = data_path
         npz_file = './data/{}/{}_{}.npz'.format(data_path,data_path, phase)
         if data_type=='org':
@@ -239,14 +240,14 @@ class DefenseSclTestDataset(Dataset):
             self.labels = data['b']
         else:
             # adv_npz_file = './data/{}/denoiser/scl_attk_{}_{}.npz'.format(data_path, data_path, phase)
-            adv_npz_file = './data/{}/scl_attk_{}_{}.npz'.format(data_path, data_path, phase)
-            adv_dir = './output/scale_attk/{}/{}/'.format(data_path, phase)
+            adv_npz_file = './data/{}/scl_attk_{}_{}_v{}.npz'.format(data_path, data_path, phase, source_version)
+            adv_dir = './output/scale_attk/{}/{}/v{}/'.format(data_path, phase, source_version)
             self.adv_images = []
             if not os.path.exists(adv_npz_file):
                 print('not found', adv_npz_file)
                 def filename(x):
                     return int(re.sub('[^0-9]','', x.split('.')[0]))
-
+                print('load img from dir', adv_dir)
                 ls_names = sorted(os.listdir(adv_dir), key=filename)
                 # print('lsname', ls_names)
                 for img_name in ls_names:
@@ -286,6 +287,7 @@ class DefenseSclTestDataset(Dataset):
         ])
 
         adv_image = torch_transform(adv_image)
+        # print("adv", adv_image.shape)
 
         return adv_image, labels
 

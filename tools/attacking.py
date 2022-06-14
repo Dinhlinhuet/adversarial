@@ -14,22 +14,25 @@ from os import path
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 print(path.dirname(path.dirname(path.abspath(__file__))))
 from dataset.dataset import SampleDataset, AgDataset
-from skimage.measure import compare_ssim as ssim
+# from skimage.measure import compare_ssim as ssim
+from skimage.metrics import structural_similarity as ssim
 from pytorch_msssim import ms_ssim, ssim,  SSIM, MS_SSIM
 from attacks.scaling_attack import scl_attack
 from opts import get_args
 
 
 def Attack(args):
-    
+    correspond_dir = 'v1'
     adversarial_examples = []
     org_img_dir = '{}/{}/{}/imgs/'.format(args.data_path,args.data_type, args.mode)
     print("org data", org_img_dir)
-    adv_dir = './output/scale_attk/{}/{}/'.format(args.data_type, args.mode)
+    adv_dir = './output/scale_attk/{}/{}/{}/'.format(args.data_type, args.mode, correspond_dir)
     print('adv dir', adv_dir)
     if not os.path.exists(adv_dir):
         os.makedirs(adv_dir)
-    src_img = cv2.imread('./data/source_imgs/waterm.jpg')
+    # source_img = './data/source_imgs/waterm.jpg'
+    source_img = './data/source_imgs/mri.webp'
+    src_img = cv2.imread(source_img)
     adv_imgs = []
     for image_path in glob.glob('{}/*.jpg'.format(org_img_dir))+glob.glob('{}/*.png'.format(org_img_dir))\
             +glob.glob('{}/*.bmp'.format(org_img_dir)):
@@ -70,16 +73,20 @@ def Attack(args):
     print('done generating')
     return adversarial_examples
 
-
+#load from npz file
 def Attack1(args):
+    correspond_dir = 'v2'
     adversarial_examples = []
     org_img_dir = '{}/{}/{}/imgs/'.format(args.data_path, args.data_type, args.mode)
     print("org data", org_img_dir)
-    adv_dir = './output/scale_attk/{}/{}/'.format(args.data_type, args.mode)
+    adv_dir = './output/scale_attk/{}/{}/{}/'.format(args.data_type, args.mode, correspond_dir)
     print('adv dir', adv_dir)
     if not os.path.exists(adv_dir):
         os.makedirs(adv_dir)
-    src_img = cv2.imread('./scaleatt/data/source_imgs/waterm.jpg')
+    # source_img = './scaleatt/data/source_imgs/waterm.jpg'
+    # source_img = './scaleatt/data/source_imgs/mri.webp'
+    source_img = './scaleatt/data/source_imgs/source2.jpg'
+    src_img = cv2.imread(source_img)
     npz_file = './{}/{}/{}_{}.npz'.format(args.data_path, args.data_type, args.data_type, args.mode)
     data = np.load(npz_file)['a']
     print('load ', npz_file)

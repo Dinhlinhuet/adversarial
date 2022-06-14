@@ -373,6 +373,113 @@ class PyramidVisionTransformerDecoder(nn.Module):
 
         return x
 
+class PyramidVisionTransformerDecoder_nomid(nn.Module):
+    def __init__(self, img_size=224, out_chans=3, num_classes=1000, embed_dims=[512, 320, 128, 64],
+                 num_heads=[8, 4, 2, 1], mlp_ratios=[4, 4, 4, 4], qkv_bias=False, qk_scale=None, drop_rate=0.,
+                 attn_drop_rate=0., drop_path_rate=0., norm_layer=nn.LayerNorm,
+                 depths=[3, 4, 6, 3], sr_ratios=[1, 2, 4, 8], num_stages=4, linear=False, num_mid=3):
+        super().__init__()
+        self.num_classes = num_classes
+        self.depths = depths
+        self.num_stages = num_stages
+        self.num_mid= num_mid
+
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]  # stochastic depth decay rule
+        # print('dpr', dpr)
+        cur = 0
+        init_h = 8
+
+        for i in range(num_stages):
+            block = nn.ModuleList([Block(
+                dim=embed_dims[i], num_heads=num_heads[i], mlp_ratio=mlp_ratios[i], qkv_bias=qkv_bias,
+                qk_scale=qk_scale,
+                drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + j], norm_layer=norm_layer,
+                sr_ratio=sr_ratios[i], linear=linear)
+                for j in range(depths[i])])
+            # print("emb", embed_dims[i])
+            patch_embed = OverlapPatchEmbed(img_size=img_size if i == num_stages - 1 else init_h * (2 ** (i + 1)),
+                                            patch_size=7 if i == num_stages - 1 else 3,
+                                            stride=4 if i == num_stages - 1 else 2,
+                                            in_chans=embed_dims[i],
+                                            embed_dim=embed_dims[i+1] if i != num_stages - 1 else out_chans,
+                                            output_padding=1 if i != num_stages - 1 else 3)
+            norm = norm_layer(embed_dims[i])
+            cur += depths[i]
+
+            setattr(self, f"patch_embed{i}", patch_embed)
+            setattr(self, f"block{i}", block)
+            setattr(self, f"norm{i}", norm)
+
+        self.fc = nn.Linear(3,3)
+        self.apply(self._init_weights)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+        elif isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
+            # nn.init.kaiming_normal_(m.weight)
+            fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+            fan_out //= m.groups
+            m.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
+            if m.bias is not None:
+                m.bias.data.zero_()
+
+    def freeze_patch_emb(self):
+        self.patch_embed1.requires_grad = False
+
+    @torch.jit.ignore
+    def no_weight_decay(self):
+        return {'pos_embed1', 'pos_embed2', 'pos_embed3', 'pos_embed4', 'cls_token'}  # has pos_embed may be better
+
+    # def get_classifier(self):
+    #     return self.head
+
+    # def reset_classifier(self, num_classes, global_pool=''):
+    #     self.num_classes = num_classes
+    #     self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+
+    def forward_features(self, x):
+        B = x.shape[0]
+
+        for i in range(self.num_stages):
+            patch_embed = getattr(self, f"patch_embed{i}")
+            block = getattr(self, f"block{i}")
+            norm = getattr(self, f"norm{i}")
+            # x, H, W = patch_embed(x)
+            # print('x0', x.shape)
+            if i==0:
+                H, W = int(np.sqrt(x.shape[1])), int(np.sqrt(x.shape[1]))
+            # print('HW', H, W)
+            for blk in block:
+                x = blk(x, H, W)
+            x = norm(x)
+            # print('aff', x.shape)
+
+            x = x.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
+            if i != self.num_stages - 1:
+                x, H, W = patch_embed(x)
+            else:
+                x, H, W = patch_embed(x, norm=False)
+
+            # print('HW', H, W)
+        # x = x.transpose(1,2)
+        # print('x',x.shape)
+        # x = self.fc(x)
+        # x = x.transpose(1,2)
+        x = x.reshape(B, -1, H, W)
+        # print('x', x.shape)
+        return x
+
+    def forward(self, x):
+        x = self.forward_features(x)
+        # x = self.head(x)
+
+        return x
 
 class DWConv(nn.Module):
     def __init__(self, dim=768):

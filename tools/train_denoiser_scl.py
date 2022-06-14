@@ -62,6 +62,10 @@ def get_args():
                         help='learning rate')
     parser.add_option('--suffix', dest='suffix', type='string',
                       default='', help='suffix to purpose')
+    parser.add_option('--loss_type', dest='loss_type', type='string',
+                      default='triplet', help='type of training loss')
+    parser.add_option('-m', '--middle', dest='middle', default=False, action="store_true",
+                      help='whether to have middle connection')
     parser.add_option('--resume', default='', type='string', metavar='PATH',
                         help='path to latest checkpoint (default: none)')
     parser.add_option('--target_model', default='./checkpoints/', type='string', metavar='PATH',
@@ -74,6 +78,7 @@ def get_args():
                       help='device1 index number')
 
     (options, args) = parser.parse_args()
+    print('model with middle connection', options.middle)
     return options
 
 def train_net(model, denoiser, denoiser_path, args):
@@ -209,23 +214,24 @@ def train_net(model, denoiser, denoiser_path, args):
             adv_outputs = model(adv_images)
             adv_outputs_ = F.softmax(adv_outputs, dim=1)
 
-            # clean_outputs_ = clean_outputs_.to(device)
             denoised_advs = denoiser(adv_images)
             denoised_advs = denoised_advs.to(device)
             # print('denoise adv', denoised_advs.min(), denoised_advs.max())
             denoised_adv_output = model(denoised_advs)
             denoised_adv_output_ = F.softmax(denoised_adv_output, dim=1)
-            # denoised_output_ = denoised_output_.cuda(gpu)
-            # denoised_adv_output_ = denoised_adv_output_.to(device)
 
             denoised_cln = denoiser(images)
             denoised_cln = denoised_cln.to(device)
             denoised_cln_output = model(denoised_cln)
             denoised_cln_output_ = F.softmax(denoised_cln_output, dim=1)
-            # denoised_cln_output_ = denoised_cln_output_.to(device)
 
-            loss = criterian(clean_outputs_,denoised_cln_output_)+ criterian(clean_outputs_, denoised_adv_output_) #-\
+            if args.loss_type=='triplet':
+                loss = criterian(clean_outputs_,denoised_cln_output_)+ criterian(clean_outputs_, denoised_adv_output_) #-\
             # criterian(clean_outputs_, adv_outputs_)
+            else:
+                loss = criterian(clean_outputs_, denoised_cln_output_) + criterian(clean_outputs_,
+                                                                                   denoised_adv_output_) -\
+                 criterian(clean_outputs_, adv_outputs_)
             # loss = criterian(clean_outputs_, denoised_adv_output_)
             loss.backward()
             optimizer.step()
@@ -280,23 +286,23 @@ def train_net(model, denoiser, denoiser_path, args):
             adv_outputs = model(adv_images)
             adv_outputs_ = F.softmax(adv_outputs, dim=1)
 
-            # clean_outputs_ = clean_outputs_.to(device)
             denoised_advs = denoiser(adv_images)
             denoised_advs = denoised_advs.to(device)
             denoised_adv_output = model(denoised_advs)
             denoised_adv_output_ = F.softmax(denoised_adv_output, dim=1)
-            # denoised_output_ = denoised_output_.cuda(gpu)
-            # denoised_adv_output_ = denoised_adv_output_.to(device)
 
             denoised_cln = denoiser(images)
             denoised_cln = denoised_cln.to(device)
             denoised_cln_output = model(denoised_cln)
             denoised_cln_output_ = F.softmax(denoised_cln_output, dim=1)
-            # denoised_output_ = denoised_output_.cuda(gpu)
-            # denoised_cln_output_ = denoised_cln_output_.to(device)
 
-            loss = criterian(clean_outputs_, denoised_cln_output_) + criterian(clean_outputs_, denoised_adv_output_) #- \
-                   # criterian(clean_outputs_, adv_outputs_)
+            if args.loss_type == 'triplet':
+                loss = criterian(clean_outputs_, denoised_cln_output_) + criterian(clean_outputs_,
+                                                                                   denoised_adv_output_)
+            else:
+                loss = criterian(clean_outputs_, denoised_cln_output_) + criterian(clean_outputs_,
+                                                                                   denoised_adv_output_) - \
+                       criterian(clean_outputs_, adv_outputs_)
 
             dice = dice_loss1(clean_outputs, masks.squeeze(1), device, n_classes)
             cln_dice = dice_loss1(denoised_cln_output, masks.squeeze(1), device, n_classes)
@@ -398,7 +404,7 @@ if __name__ == "__main__":
     denoiser_path = os.path.join(denoiser_folder, '{}_{}.pth'.format(args.model, args.suffix))
     # denoiser_path = os.path.join(denoiser_folder, args.model + '_pgd.pth')
     print('save path', denoiser_path)
-    denoiser= get_net(args.height, args.channels, args.resume)
+    denoiser= get_net(args.height, args.channels, args.resume, args.middle)
     # summary(model, input_size=(n_channels, args.height, args.width), device = 'cpu')
     # summary(denoiser, input_size=(n_channels, args.height, args.width), device='cpu')
     pytorch_total_params = sum(p.numel() for p in denoiser.parameters())

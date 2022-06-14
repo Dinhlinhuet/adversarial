@@ -47,14 +47,14 @@ def test(model, denoiser, args):
     # args.output_path = '{}/{}/{}/{}/{}/'.format(args.output_path,args.data_path,args.model,args.adv_model, args.attacks)
     # args.output_path = os.path.join(args.output_path, args.data_path,'512', args.model, args.adv_model,
     #                                 args.data_type, args.attacks)
-
     if args.attacks =='scl_attk':
-        output_path = '{}/{}/{}/{}/'.format(args.output_path,args.data_path,args.model,args.attacks)
+        source_version = args.source_version
+        output_path = '{}/{}/{}/{}/v{}/'.format(args.output_path,args.data_path,args.model,args.attacks, source_version)
         denoise_output = os.path.join(args.denoise_output, args.data_path, args.model,
-                                        args.data_type, args.attacks, suffix)
+                                        args.data_type, args.attacks, suffix,'v'+source_version)
     else:
         output_path = os.path.join(args.output_path, args.data_path, args.model, args.adv_model,
-                                        args.attacks,args.data_type, 'm'+ args.mask_type+'t'+args.target, suffix)
+                                        args.attacks,args.data_type, 'm'+ args.mask_type+'t'+args.target, suffix, )
         denoise_output = os.path.join(args.denoise_output, args.data_path, args.model, args.adv_model,
                                         args.attacks, args.data_type, 'm'+ args.mask_type+'t'+args.target, suffix)
     if not os.path.exists(output_path):
@@ -73,7 +73,7 @@ def test(model, denoiser, args):
     # test_dataset = SampleDataset(data_path,args.classes, args.channels, args.mode, None, args.adv_model, args.attacks,
     #                              args.target, args.data_type, args.width, args.height, args.mask_type, suffix)
     if args.attacks=='scl_attk':
-        test_dataset = DefenseSclTestDataset(data_path, 'test', args.channels, data_type=args.data_type)
+        test_dataset = DefenseSclTestDataset(data_path, 'test', args.channels, data_type=args.data_type, args=args)
     elif any(attack in args.attacks for attack in ['dag','ifgsm']):
         if args.data_path=='brain':
             test_dataset = AgDataset(data_path, n_classes, args.channels, args.mode, args.model, \
@@ -95,7 +95,7 @@ def test(model, denoiser, args):
     test_loader = DataLoader(
         test_dataset,
         batch_size=args.batch_size,
-        num_workers=4,
+        num_workers=2,
     )
     
     print('test_dataset : {}, test_loader : {}'.format(len(test_dataset), len(test_loader)))
@@ -198,9 +198,7 @@ def onehot2norm(imgs):
     return out
 
 if __name__ == "__main__":
-
     args = get_args()
-    
     n_channels = args.channels
     n_classes = args.classes
     
@@ -239,7 +237,7 @@ if __name__ == "__main__":
     # denoiser_path = os.path.join(args.denoiser_path, args.data_path, '{}.pth'.format(guide_mode))
     print('denoiser ', denoiser_path)
     # denoiser = get_net(args.height, args.width, args.classes, args.channels, denoiser_path, args.batch_size)
-    denoiser = get_net(args.height, args.channels, denoiser_path)
+    denoiser = get_net(args.height, args.channels, denoiser_path, args.middle)
     # model_path = os.path.join(args.model_path, 'fundus', args.model + '.pth')
     print('target model', model_path)
     model.load_state_dict(torch.load(model_path))
