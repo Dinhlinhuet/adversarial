@@ -67,8 +67,8 @@ def get_args():
                       default='./output/denoised_imgs/', help='denoise_output')
     parser.add_argument('--device', dest='device', default=0, type=int,
                       help='device index number')
-    parser.add_argument('--device1', dest='device1', default=-1, type=int,
-                      help='device1 index number')
+    parser.add_argument('--transfer', dest='transfer', default=False, action="store_true",
+                      help='transferability')
     parser.add_argument("--separable_conv", action='store_true', default=False,
                         help="apply separable conv to decoder and aspp")
     parser.add_argument("--output_stride", type=int, default=16, choices=[8, 16])

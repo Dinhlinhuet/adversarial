@@ -233,7 +233,10 @@ if __name__ == "__main__":
     # prefix = 'pvt_scl_plus_leff_sub'
     guide_mode = 'UNet'
     # guide_mode = 'DenseNet'
-    denoiser_path = os.path.join(args.denoiser_path, args.data_path, args.attacks, '{}_{}.pth'.format(guide_mode,prefix))
+    if not args.transfer:
+        denoiser_path = os.path.join(args.denoiser_path, args.data_path, args.attacks, '{}_{}.pth'.format(guide_mode,prefix))
+    else:
+        denoiser_path = args.denoiser_path
     # denoiser_path = os.path.join(args.denoiser_path, args.data_path, '{}.pth'.format(guide_mode))
     print('denoiser ', denoiser_path)
     # denoiser = get_net(args.height, args.width, args.classes, args.channels, denoiser_path, args.batch_size)
